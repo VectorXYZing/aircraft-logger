@@ -1,24 +1,96 @@
-# Aircraft Logger
+# ✈️ Aircraft Logger with Metadata and Dashboard
 
-A Raspberry Pi-based aircraft data logger for FR24 and PiAware. Captures, enriches, and emails daily aircraft logs, and serves a local dashboard for live viewing.
+A Raspberry Pi-based local aircraft tracker using FR24/PiAware feeds with:
 
-## Features
-- Connects to local dump1090 or FR24 stream
-- Logs all aircraft seen each day
-- Enriches data with registration and operator info
-- Emails zipped CSV daily
-- Web-based dashboard (Flask)
+- ✅ CSV logging with metadata enrichment (registration, model, operator)
+- ✅ Daily log email
+- ✅ Web-based live dashboard
+- ✅ Easy install with `setup.sh`
 
-## Requirements
-- Raspberry Pi (tested on Pi 4)
-- Python 3
-- dump1090-fa or fr24feed installed
+---
 
-## Setup
-1. Clone repo
-2. Create `.env` with email config
-3. Install Python packages: `pip install -r requirements.txt`
-4. Set up cron jobs (see `crontab -e` section)
+## 📸 What It Does
 
-## Author
-[VectorXYZing](https://github.com/VectorXYZing)
+This tool listens to `30003` feed data from FR24 or PiAware, logs aircraft with unique ICAO hex codes, and enriches with live metadata from public APIs. It also provides:
+
+- ✉️ Daily email with the full CSV log
+- 🌐 Local dashboard for browsing recent flights
+
+---
+
+## 🛠 Requirements
+
+- Raspberry Pi running Debian (Bookworm tested)
+- Python 3.11+
+- FR24 and/or PiAware installed and running
+- Internet access for metadata enrichment (cached)
+
+---
+
+## 🚀 Quick Install
+
+```bash
+cd ~
+git clone git@github.com:VectorXYZing/aircraft-logger.git
+cd aircraft-logger
+chmod +x setup.sh
+./setup.sh
+```
+
+Then visit:
+
+```
+http://<your-pi-ip>:5000
+```
+
+---
+
+## 📁 Folder Structure
+
+```bash
+aircraft-logger/
+├── aircraft_logger.py        # Main logging script
+├── send_log_email.py        # Daily email script
+├── dashboard.py             # Web dashboard (Flask)
+├── setup.sh                 # Installer and crontab setup
+├── .env                     # Credentials (not committed)
+├── logs/                    # CSV logs (daily)
+├── static/                  # CSS and favicon
+└── templates/               # HTML templates
+```
+
+---
+
+## 🔒 Security
+
+- SMTP credentials stored in `.env` and ignored via `.gitignore`
+- Uses `requests_cache` to avoid repeated lookups
+- No passwords committed to GitHub
+
+---
+
+## ✅ Features Completed
+
+- [x] One record per aircraft (consolidated data)
+- [x] Enriched metadata from OpenSky (with fallback)
+- [x] CSV log + live web interface
+- [x] Email report sent daily via cron
+- [x] Setup script installs everything and adds crontab
+
+---
+
+## 🧭 Roadmap
+
+- [ ] Add time range selector to dashboard
+- [ ] Export filtered logs
+- [ ] Deploy to Docker / other OS support
+
+---
+
+## 📜 License
+
+[Creative Commons Zero v1.0 Universal](LICENSE) — Public Domain.
+
+---
+
+Built with 💡 by [VectorXYZing](https://github.com/VectorXYZing)
