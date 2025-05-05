@@ -1,5 +1,5 @@
 # ✈️ Aircraft Logger with Metadata and Dashboard
-
+<!-- last updated by Paul manually -->
 A Raspberry Pi-based local aircraft tracker using FR24/PiAware feeds with:
 
 - ✅ CSV logging with metadata enrichment (registration, model, operator)
