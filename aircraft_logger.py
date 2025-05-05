@@ -1,136 +1,125 @@
-#!/usr/bin/env python3
 import socket
 import csv
 import os
 import time
-from datetime import datetime
 import requests
+from datetime import datetime
 from dotenv import load_dotenv
+from collections import defaultdict
 
 # Load environment variables
 load_dotenv()
+REGINFO_API_KEY = os.getenv("REGINFO_API_KEY")
 
-API_BASE_URL = "https://opensky-network.org/api/metadata/"
-OUTPUT_DIR = os.path.expanduser("~/aircraft-logger/logs")
-CACHE = {}
+# Constants
+HOST = '127.0.0.1'
+PORT = 30003
+LOG_DIR = os.path.expanduser('~/aircraft-logger/logs')
+CACHE_TTL = 86400  # 1 day for metadata cache
+LOG_THROTTLE_SECONDS = 60  # Only log 1 entry per aircraft per minute
 
-# Ensure output directory exists
-os.makedirs(OUTPUT_DIR, exist_ok=True)
+# Create logs directory if needed
+os.makedirs(LOG_DIR, exist_ok=True)
 
-# Get today's log file path
-def get_log_file_path():
-    date_str = datetime.utcnow().strftime("%Y-%m-%d")
-    return os.path.join(OUTPUT_DIR, f"aircraft_log_{date_str}.csv")
+# Metadata cache
+metadata_cache = {}
+last_logged_times = defaultdict(lambda: 0)
 
-# Lookup aircraft metadata with basic caching
-def lookup_aircraft_metadata(hex_code):
-    if hex_code in CACHE:
-        return CACHE[hex_code]
+
+def get_today_log_path():
+    filename = f"aircraft_log_{datetime.utcnow().date()}.csv"
+    return os.path.join(LOG_DIR, filename)
+
+
+def ensure_log_file():
+    path = get_today_log_path()
+    if not os.path.exists(path):
+        with open(path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Time UTC', 'Hex', 'Callsign', 'Altitude', 'Speed', 'Latitude', 'Longitude', 'Registration', 'Model', 'Operator'])
+    return path
+
+
+def fetch_metadata(hex_code):
+    if not REGINFO_API_KEY:
+        return '', '', ''
+
+    cached = metadata_cache.get(hex_code)
+    if cached and time.time() - cached['timestamp'] < CACHE_TTL:
+        return cached['registration'], cached['model'], cached['operator']
 
     try:
-        response = requests.get(f"https://opensky-network.org/api/metadata/aircraft/{hex_code}", timeout=5)
+        url = f"https://reginfo.org/api/v1/{hex_code}?apikey={REGINFO_API_KEY}"
+        response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
-            registration = data.get("registration", "")
-            model = data.get("model", "")
-            operator = data.get("owner", "")  # OpenSky sometimes uses 'owner'
-            CACHE[hex_code] = (registration, model, operator)
-            return registration, model, operator
+            reg = data.get('registration', '')
+            model = data.get('aircraft', {}).get('model', '')
+            operator = data.get('operator', {}).get('name', '')
+            metadata_cache[hex_code] = {
+                'registration': reg,
+                'model': model,
+                'operator': operator,
+                'timestamp': time.time()
+            }
+            return reg, model, operator
     except Exception as e:
-        print(f"Metadata lookup failed for {hex_code}: {e}")
+        print(f"Metadata fetch failed for {hex_code}: {e}")
 
-    return "", "", ""
+    return '', '', ''
 
-# Parse SBS message line into a dictionary
-def parse_sbs1_message(line):
-    fields = line.strip().split(',')
-    if len(fields) < 22:
+
+def parse_message(message):
+    parts = message.strip().split(',')
+    if len(parts) < 22:
         return None
 
-    return {
-        'hex': fields[4].strip(),
-        'callsign': fields[10].strip(),
-        'altitude': fields[11].strip(),
-        'speed': fields[12].strip(),
-        'lat': fields[14].strip(),
-        'lon': fields[15].strip(),
-        'timestamp': datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S")
-    }
+    hex_code = parts[4].strip()
+    callsign = parts[10].strip()
+    altitude = parts[11].strip()
+    speed = parts[12].strip()
+    lat = parts[14].strip()
+    lon = parts[15].strip()
 
-# Write one row to the log
-def log_aircraft(row):
-    file_path = get_log_file_path()
-    file_exists = os.path.isfile(file_path)
+    return hex_code, callsign, altitude, speed, lat, lon
 
-    with open(file_path, mode='a', newline='') as f:
+
+def log_aircraft(data):
+    hex_code = data[0]
+    now = time.time()
+    if now - last_logged_times[hex_code] < LOG_THROTTLE_SECONDS:
+        return
+    last_logged_times[hex_code] = now
+
+    timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
+    reg, model, operator = fetch_metadata(hex_code)
+    row = [timestamp, hex_code, *data[1:], reg, model, operator]
+
+    with open(ensure_log_file(), 'a', newline='') as f:
         writer = csv.writer(f)
-        if not file_exists:
-            writer.writerow(["Time UTC", "Hex", "Callsign", "Altitude", "Speed", "Latitude", "Longitude", "Registration", "Model", "Operator"])
         writer.writerow(row)
 
-# Consolidate data per aircraft and flush after timeout
-aircraft_data = {}
-TIMEOUT_SECONDS = 120
+    print(f"Logged aircraft: {row}")
 
+
+# Main loop
 print("Starting aircraft logger...")
-sock = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-sock.connect(('127.0.0.1', 30003))
-print("Connected. Listening for aircraft data...")
+log_path = ensure_log_file()
+print(f"Logging to: {log_path}")
+print(f"Connecting to {HOST}:{PORT}...")
 
-try:
-    while True:
-        line = sock.recv(4096).decode(errors='ignore')
-        if not line:
-            continue
-
-        for raw_line in line.strip().split('\n'):
-            msg = parse_sbs1_message(raw_line)
-            if not msg or not msg['hex']:
-                continue
-
-            hex_code = msg['hex']
-            now = time.time()
-
-            entry = aircraft_data.get(hex_code, {
-                'timestamp': now,
-                'callsign': '',
-                'altitude': '',
-                'speed': '',
-                'lat': '',
-                'lon': '',
-                'registration': '',
-                'model': '',
-                'operator': ''
-            })
-
-            entry['timestamp'] = now
-            entry['callsign'] = msg['callsign'] or entry['callsign']
-            entry['altitude'] = msg['altitude'] or entry['altitude']
-            entry['speed'] = msg['speed'] or entry['speed']
-            entry['lat'] = msg['lat'] or entry['lat']
-            entry['lon'] = msg['lon'] or entry['lon']
-
-            if not entry['registration']:
-                registration, model, operator = lookup_aircraft_metadata(hex_code)
-                entry['registration'] = registration
-                entry['model'] = model
-                entry['operator'] = operator
-
-            aircraft_data[hex_code] = entry
-
-        # Flush stale entries
-        expired = [hex_code for hex_code, v in aircraft_data.items() if time.time() - v['timestamp'] > TIMEOUT_SECONDS]
-        for hex_code in expired:
-            v = aircraft_data.pop(hex_code)
-            row = [datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), hex_code, v['callsign'], v['altitude'], v['speed'], v['lat'], v['lon'], v['registration'], v['model'], v['operator']]
-            log_aircraft(row)
-            print(f"Logged aircraft: {row}")
-
-        time.sleep(1)
-
-except KeyboardInterrupt:
-    print("\nStopping logger. Flushing remaining aircraft...")
-    for hex_code, v in aircraft_data.items():
-        row = [datetime.utcnow().strftime("%Y-%m-%d %H:%M:%S"), hex_code, v['callsign'], v['altitude'], v['speed'], v['lat'], v['lon'], v['registration'], v['model'], v['operator']]
-        log_aircraft(row)
-        print(f"Flushed stale aircraft: {row}")
+while True:
+    try:
+        with socket.create_connection((HOST, PORT)) as sock:
+            print("Connected. Listening for aircraft data...")
+            file = sock.makefile()
+            for line in file:
+                parsed = parse_message(line)
+                if parsed:
+                    log_aircraft(parsed)
+    except (ConnectionRefusedError, socket.error) as e:
+        print(f"Connection failed: {e}. Retrying in 10 seconds...")
+        time.sleep(10)
+    except Exception as e:
+        print(f"Unexpected error: {e}")
+        time.sleep(5)
