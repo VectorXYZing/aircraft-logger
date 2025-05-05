@@ -1,35 +1,40 @@
 #!/bin/bash
 
-set -e
-
 echo "🚀 Setting up Aircraft Logger..."
 
-# Create virtual environment if it doesn't exist
-if [ ! -d "aircraftenv" ]; then
-  python3 -m venv aircraftenv
+# Create virtual environment if not exists
+if [ ! -d "~/aircraftenv" ]; then
+  echo "🔧 Creating Python virtual environment..."
+  python3 -m venv ~/aircraftenv
 fi
-source aircraftenv/bin/activate
 
-# Upgrade pip
+source ~/aircraftenv/bin/activate
+
+# Install required Python packages
+echo "📦 Installing dependencies..."
 pip install --upgrade pip
+pip install -r ~/aircraft-logger/requirements.txt
 
-# Install dependencies
-pip install -r requirements.txt
+# Create logs directory
+mkdir -p ~/aircraft-logger/logs
 
-# Create logs directory if it doesn't exist
-mkdir -p logs
-
-# Set up .env file if it doesn't exist
-if [ ! -f ".env" ]; then
-  echo "EMAIL_USER=your_email@example.com" >> .env
-  echo "EMAIL_PASS=your_password_or_app_specific_password" >> .env
-  echo "EMAIL_TO=recipient_email@example.com" >> .env
+# Create .env template if missing
+if [ ! -f ~/aircraft-logger/.env ]; then
+  echo "⚠️  .env file not found. Creating template..."
+  cat <<EOF > ~/aircraft-logger/.env
+EMAIL_USER=you@example.com
+EMAIL_PASS=yourpassword
+EMAIL_TO=recipient@example.com
+EMAIL_SUBJECT="Daily Aircraft Log"
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+EOF
+  echo "⚠️  Please edit ~/aircraft-logger/.env with your actual email settings."
 fi
 
-# Create and enable aircraft-logger systemd service
-SERVICE_FILE=/etc/systemd/system/aircraft-logger.service
-if [ ! -f "$SERVICE_FILE" ]; then
-  sudo bash -c 'cat > /etc/systemd/system/aircraft-logger.service' <<EOF
+# Set up systemd service for aircraft logger
+echo "🔁 Setting up aircraft logger service..."
+cat <<EOF | sudo tee /etc/systemd/system/aircraft-logger.service > /dev/null
 [Unit]
 Description=Aircraft Logger
 After=network.target
@@ -37,6 +42,8 @@ After=network.target
 [Service]
 ExecStart=/home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/aircraft_logger.py
 WorkingDirectory=/home/pi/aircraft-logger
+StandardOutput=inherit
+StandardError=inherit
 Restart=always
 User=pi
 Environment="PYTHONUNBUFFERED=1"
@@ -44,16 +51,15 @@ Environment="PYTHONUNBUFFERED=1"
 [Install]
 WantedBy=multi-user.target
 EOF
-  sudo systemctl daemon-reexec
-  sudo systemctl daemon-reload
-  sudo systemctl enable aircraft-logger.service
-  sudo systemctl start aircraft-logger.service
-fi
 
-# Create and enable aircraft-dashboard systemd service
-DASHBOARD_SERVICE_FILE=/etc/systemd/system/aircraft-dashboard.service
-if [ ! -f "$DASHBOARD_SERVICE_FILE" ]; then
-  sudo bash -c 'cat > /etc/systemd/system/aircraft-dashboard.service' <<EOF
+sudo systemctl daemon-reexec
+sudo systemctl daemon-reload
+sudo systemctl enable aircraft-logger.service
+sudo systemctl restart aircraft-logger.service
+
+# Set up systemd service for dashboard
+echo "📊 Setting up aircraft dashboard service..."
+cat <<EOF | sudo tee /etc/systemd/system/aircraft-dashboard.service > /dev/null
 [Unit]
 Description=Aircraft Logger Dashboard
 After=network.target
@@ -61,6 +67,8 @@ After=network.target
 [Service]
 ExecStart=/home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/dashboard.py
 WorkingDirectory=/home/pi/aircraft-logger
+StandardOutput=inherit
+StandardError=inherit
 Restart=always
 User=pi
 Environment="PYTHONUNBUFFERED=1"
@@ -68,16 +76,13 @@ Environment="PYTHONUNBUFFERED=1"
 [Install]
 WantedBy=multi-user.target
 EOF
-  sudo systemctl daemon-reexec
-  sudo systemctl daemon-reload
-  sudo systemctl enable aircraft-dashboard.service
-  sudo systemctl start aircraft-dashboard.service
-fi
 
-# Set up daily email report cron job (clears other crontab entries first)
-crontab -l | grep -v "send_log_email.py" | crontab - || true
-CRON_CMD="0 23 * * * /home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/send_log_email.py"
-(crontab -l 2>/dev/null; echo "$CRON_CMD") | crontab -
+sudo systemctl daemon-reload
+sudo systemctl enable aircraft-dashboard.service
+sudo systemctl restart aircraft-dashboard.service
 
+# Set up daily cron job for emailing logs
 echo "📅 Setting up cron job for daily email report..."
+(crontab -l 2>/dev/null | grep -v send_log_email.py ; echo "0 8 * * * /home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/send_log_email.py") | crontab -
+
 echo "✅ Setup complete!"
