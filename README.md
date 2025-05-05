@@ -1,96 +1,134 @@
-# ✈️ Aircraft Logger with Metadata and Dashboard
-<!-- last updated by Paul manually -->
-A Raspberry Pi-based local aircraft tracker using FR24/PiAware feeds with:
+# ✈️ Aircraft Logger
 
-- ✅ CSV logging with metadata enrichment (registration, model, operator)
-- ✅ Daily log email
-- ✅ Web-based live dashboard
-- ✅ Easy install with `setup.sh`
+A lightweight aircraft logger and dashboard for Raspberry Pi that:
 
----
+- Captures ADS-B data from FR24/PiAware feeds
+- Enriches it with aircraft metadata using OpenSky
+- Logs to daily CSV files
+- Emails daily logs automatically
+- Hosts a web dashboard to explore sightings
 
-## 📸 What It Does
+## 🔧 Features
 
-This tool listens to `30003` feed data from FR24 or PiAware, logs aircraft with unique ICAO hex codes, and enriches with live metadata from public APIs. It also provides:
+- ADS-B message capture from `30003` port
+- Metadata enrichment from OpenSky (no API key required)
+- Caching to reduce lookups
+- Logs to `~/aircraft-logger/logs/aircraft_log_YYYY-MM-DD.csv`
+- Sends daily log email at 7pm (customisable via cron)
+- Web dashboard with filtering and styling
+- Setup via single script (`setup.sh`)
 
-- ✉️ Daily email with the full CSV log
-- 🌐 Local dashboard for browsing recent flights
+## 🖥️ Ideal for:
 
----
+- Hobbyists running aircraft feeders (PiAware/FR24)
+- People curious about what's flying overhead
+- Teaching basic data logging, APIs, dashboards
 
-## 🛠 Requirements
+## 📁 Project Structure
 
-- Raspberry Pi running Debian (Bookworm tested)
-- Python 3.11+
-- FR24 and/or PiAware installed and running
-- Internet access for metadata enrichment (cached)
+```
+~/aircraft-logger/
+├── aircraft_logger.py       # Main logger script
+├── send_log_email.py        # Sends daily email summary
+├── dashboard.py             # Flask dashboard web app
+├── templates/
+│   └── index.html           # HTML template for dashboard
+├── static/
+│   ├── style.css            # Dashboard CSS styling
+│   └── script.js            # Dashboard interactivity (optional)
+├── logs/                    # Daily aircraft logs stored here
+├── .env                     # Local config (ignored by git)
+├── .gitignore
+├── requirements.txt
+└── setup.sh                 # One-step setup script
+```
 
----
+## 🧪 Prerequisites
 
-## 🚀 Quick Install
+- Raspberry Pi or Linux system
+- ADS-B data stream (via FR24, PiAware, or similar)
+- Python 3.9+ (venv supported)
+
+## 📦 Installation (Novice-Friendly)
+
+1. **Clone the repo** (on your Pi or system with FR24/PiAware):
 
 ```bash
-cd ~
-git clone git@github.com:VectorXYZing/aircraft-logger.git
+git clone https://github.com/VectorXYZing/aircraft-logger.git
 cd aircraft-logger
+```
+
+2. **Run setup script**
+
+```bash
 chmod +x setup.sh
 ./setup.sh
 ```
 
-Then visit:
+This installs dependencies, sets up cron and systemd services, and prepares the environment.
+
+3. **Create `.env` file manually**
+
+This file holds your private email config for daily log emails. Create `.env` in the root folder (`~/aircraft-logger/.env`) with the following contents:
 
 ```
-http://<your-pi-ip>:5000
+EMAIL_FROM=your_email@example.com
+EMAIL_TO=recipient_email@example.com
+SMTP_SERVER=smtp.example.com
+SMTP_PORT=587
+EMAIL_USER=your_email_username
+EMAIL_PASSWORD=your_email_password
 ```
 
----
+📌 _This file is private and should **never** be uploaded to GitHub. It's excluded via `.gitignore`._
 
-## 📁 Folder Structure
+4. **View the dashboard**
 
+Once setup is complete, visit:
+
+```
+http://<your-raspberry-pi-ip>:5000
+```
+
+You’ll see a live dashboard of aircraft data.
+
+## 🧠 Common Questions (Novice Help)
+
+### Q: I don’t see metadata like aircraft model/operator?
+A: This feature uses the OpenSky API. Sometimes OpenSky may not have info for every hex code, especially for military/private planes.
+
+### Q: How do I stop the logger or dashboard?
 ```bash
-aircraft-logger/
-├── aircraft_logger.py        # Main logging script
-├── send_log_email.py        # Daily email script
-├── dashboard.py             # Web dashboard (Flask)
-├── setup.sh                 # Installer and crontab setup
-├── .env                     # Credentials (not committed)
-├── logs/                    # CSV logs (daily)
-├── static/                  # CSS and favicon
-└── templates/               # HTML templates
+sudo systemctl stop aircraft-logger
+sudo systemctl stop aircraft-dashboard
 ```
 
----
+### Q: How do I check if it’s working?
+```bash
+systemctl status aircraft-logger
+journalctl -u aircraft-logger -n 50
+```
 
-## 🔒 Security
+### Q: How do I check the dashboard?
+```bash
+systemctl status aircraft-dashboard
+```
 
-- SMTP credentials stored in `.env` and ignored via `.gitignore`
-- Uses `requests_cache` to avoid repeated lookups
-- No passwords committed to GitHub
+## 🚀 Roadmap Ideas
 
----
+- CSV viewer in dashboard
+- Heatmap / timeline of flights
+- Metadata history lookup cache
+- Export to Google Sheets or SQLite
 
-## ✅ Features Completed
+## ✅ Status
 
-- [x] One record per aircraft (consolidated data)
-- [x] Enriched metadata from OpenSky (with fallback)
-- [x] CSV log + live web interface
-- [x] Email report sent daily via cron
-- [x] Setup script installs everything and adds crontab
-
----
-
-## 🧭 Roadmap
-
-- [ ] Add time range selector to dashboard
-- [ ] Export filtered logs
-- [ ] Deploy to Docker / other OS support
+- Fully working, v1.0 stable.
+- Verified with FR24 + PiAware on Raspberry Pi 4.
+- Logs, dashboard, email all tested.
 
 ---
 
-## 📜 License
+Built by [VectorXYZing](https://github.com/VectorXYZing). Contributions and feedback welcome!
 
-[Creative Commons Zero v1.0 Universal](LICENSE) — Public Domain.
-
----
-
-Built with 💡 by [VectorXYZing](https://github.com/VectorXYZing)
+🛫 Happy spotting!
