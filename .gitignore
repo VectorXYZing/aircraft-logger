@@ -10,3 +10,4 @@ logs/
 
 # Ignore sensitive config
 .env
+.env
