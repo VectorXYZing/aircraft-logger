@@ -9,27 +9,24 @@ from collections import defaultdict
 
 # Load environment variables
 load_dotenv()
-REGINFO_API_KEY = os.getenv("REGINFO_API_KEY")
 
 # Constants
 HOST = '127.0.0.1'
 PORT = 30003
 LOG_DIR = os.path.expanduser('~/aircraft-logger/logs')
-CACHE_TTL = 86400  # 1 day for metadata cache
-LOG_THROTTLE_SECONDS = 60  # Only log 1 entry per aircraft per minute
+CACHE_TTL = 86400  # 1 day
+LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
 
-# Create logs directory if needed
+# Ensure log directory exists
 os.makedirs(LOG_DIR, exist_ok=True)
 
-# Metadata cache
+# Metadata cache and logging throttle
 metadata_cache = {}
 last_logged_times = defaultdict(lambda: 0)
-
 
 def get_today_log_path():
     filename = f"aircraft_log_{datetime.utcnow().date()}.csv"
     return os.path.join(LOG_DIR, filename)
-
 
 def ensure_log_file():
     path = get_today_log_path()
@@ -39,23 +36,19 @@ def ensure_log_file():
             writer.writerow(['Time UTC', 'Hex', 'Callsign', 'Altitude', 'Speed', 'Latitude', 'Longitude', 'Registration', 'Model', 'Operator'])
     return path
 
-
 def fetch_metadata(hex_code):
-    if not REGINFO_API_KEY:
-        return '', '', ''
-
     cached = metadata_cache.get(hex_code)
     if cached and time.time() - cached['timestamp'] < CACHE_TTL:
         return cached['registration'], cached['model'], cached['operator']
 
     try:
-        url = f"https://reginfo.org/api/v1/{hex_code}?apikey={REGINFO_API_KEY}"
+        url = f"https://opensky-network.org/api/metadata/aircraft/icao/{hex_code}"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
             reg = data.get('registration', '')
-            model = data.get('aircraft', {}).get('model', '')
-            operator = data.get('operator', {}).get('name', '')
+            model = data.get('typecode', '')
+            operator = data.get('operator', '')
             metadata_cache[hex_code] = {
                 'registration': reg,
                 'model': model,
@@ -67,7 +60,6 @@ def fetch_metadata(hex_code):
         print(f"Metadata fetch failed for {hex_code}: {e}")
 
     return '', '', ''
-
 
 def parse_message(message):
     parts = message.strip().split(',')
@@ -82,7 +74,6 @@ def parse_message(message):
     lon = parts[15].strip()
 
     return hex_code, callsign, altitude, speed, lat, lon
-
 
 def log_aircraft(data):
     hex_code = data[0]
@@ -100,7 +91,6 @@ def log_aircraft(data):
         writer.writerow(row)
 
     print(f"Logged aircraft: {row}")
-
 
 # Main loop
 print("Starting aircraft logger...")
