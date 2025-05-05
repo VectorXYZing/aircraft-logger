@@ -1,57 +1,49 @@
 import os
-import datetime
-import smtplib
-from email.message import EmailMessage
-import zipfile
 from dotenv import load_dotenv
+import smtplib
+from email.mime.text import MIMEText
+from email.mime.multipart import MIMEMultipart
+from datetime import datetime
 
 # Load environment variables
-load_dotenv('/home/pi/aircraft-logger/.env')
+load_dotenv()
 
-# Configuration from environment
-SMTP_SERVER = os.getenv("SMTP_SERVER")
-SMTP_PORT = int(os.getenv("SMTP_PORT", 587))
-SMTP_USER = os.getenv("SMTP_USER")
-SMTP_PASSWORD = os.getenv("SMTP_PASSWORD")
-EMAIL_TO = os.getenv("EMAIL_TO")
+EMAIL_HOST = os.getenv("EMAIL_HOST")
+EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
+EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
+EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")
 
-# Paths
-log_dir = "/home/pi/aircraft-logger/logs"
-today_str = datetime.datetime.utcnow().strftime("%Y-%m-%d")
-csv_filename = os.path.join(log_dir, f"aircraft_log_{today_str}.csv")
-zip_filename = os.path.join(log_dir, f"{today_str}.zip")
+LOG_DIR = os.path.expanduser("~/aircraft-logger/logs")
+TODAY = datetime.utcnow().strftime("%Y-%m-%d")
+LOG_FILE = os.path.join(LOG_DIR, f"aircraft_log_{TODAY}.csv")
 
-# Create ZIP if CSV exists
-if os.path.isfile(csv_filename):
+def send_email():
+    if not os.path.exists(LOG_FILE):
+        print(f"No log file found for {TODAY}")
+        return
+
+    with open(LOG_FILE, "r") as f:
+        log_content = f.read()
+
+    subject = f"Aircraft Log Report – {TODAY}"
+    msg = MIMEMultipart()
+    msg["From"] = EMAIL_ADDRESS
+    msg["To"] = EMAIL_RECIPIENT
+    msg["Subject"] = subject
+
+    msg.attach(MIMEText("See attached aircraft log for today.\n\n", "plain"))
+    msg.attach(MIMEText(log_content, "plain"))
+
     try:
-        with zipfile.ZipFile(zip_filename, "w", zipfile.ZIP_DEFLATED) as zipf:
-            zipf.write(csv_filename, arcname=os.path.basename(csv_filename))
-        print(f"Zipped {csv_filename} to {zip_filename}")
-    except Exception as e:
-        print(f"Failed to zip log file: {e}")
-        zip_filename = None
-else:
-    print(f"No log file found for today: {csv_filename}")
-    zip_filename = None
-
-# Compose and send email
-try:
-    msg = EmailMessage()
-    msg["Subject"] = f"Daily Aircraft Log - {today_str}"
-    msg["From"] = SMTP_USER
-    msg["To"] = EMAIL_TO
-    msg.set_content("Attached is the daily aircraft log from your Raspberry Pi.")
-
-    if zip_filename and os.path.isfile(zip_filename):
-        with open(zip_filename, "rb") as f:
-            msg.add_attachment(f.read(), maintype="application", subtype="zip", filename=os.path.basename(zip_filename))
-    else:
-        msg.set_content("No log file was available to attach today.")
-
-    with smtplib.SMTP(SMTP_SERVER, SMTP_PORT) as server:
+        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
         server.starttls()
-        server.login(SMTP_USER, SMTP_PASSWORD)
+        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
         server.send_message(msg)
-    print("Email sent.")
-except Exception as e:
-    print(f"Error sending email: {e}")
+        server.quit()
+        print("✅ Email sent successfully.")
+    except Exception as e:
+        print(f"❌ Failed to send email: {e}")
+
+if __name__ == "__main__":
+    send_email()
