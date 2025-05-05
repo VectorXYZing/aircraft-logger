@@ -1,40 +1,77 @@
 #!/bin/bash
 
-echo "=== Aircraft Logger Setup ==="
+set -e
 
-# Step 1: Create virtual environment
-echo "-> Creating virtual environment..."
-python3 -m venv ~/aircraftenv
-source ~/aircraftenv/bin/activate
+APP_DIR="/home/pi/aircraft-logger"
+VENV_DIR="$APP_DIR/aircraftenv"
+PYTHON_BIN="$VENV_DIR/bin/python"
 
-# Step 2: Install Python dependencies
-echo "-> Installing dependencies..."
-pip install flask python-dotenv requests
-
-# Step 3: Ensure log directory exists
-echo "-> Creating logs directory..."
-mkdir -p ~/aircraft-logger/logs
-
-# Step 4: Create .env file if missing
-ENV_FILE=~/aircraft-logger/.env
-if [ ! -f "$ENV_FILE" ]; then
-  echo "-> Creating .env file..."
-  cat <<EOF > $ENV_FILE
-SMTP_SERVER=smtp.example.com
-SMTP_PORT=587
-SMTP_USER=your@email.com
-SMTP_PASSWORD=yourpassword
-EMAIL_TO=recipient@email.com
-EOF
-  echo "!! Remember to edit your .env file with real SMTP credentials !!"
+# Create virtual environment if not exists
+if [ ! -d "$VENV_DIR" ]; then
+  echo "Creating virtual environment..."
+  python3 -m venv "$VENV_DIR"
 fi
 
-# Step 5: Setup cron jobs
-echo "-> Setting up cron jobs..."
+# Activate virtualenv and install requirements
+source "$VENV_DIR/bin/activate"
+echo "Installing Python dependencies..."
+pip install --upgrade pip
+pip install -r "$APP_DIR/requirements.txt"
 
-# Load existing crontab and add new entries if not already present
-(crontab -l 2>/dev/null | grep -v aircraft_logger.py; echo "@reboot /home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/aircraft_logger.py &") | crontab -
-(crontab -l 2>/dev/null | grep -v send_log_email.py; echo "0 23 * * * /home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/send_log_email.py") | crontab -
-(crontab -l 2>/dev/null | grep -v dashboard.py; echo "@reboot /home/pi/aircraftenv/bin/python /home/pi/aircraft-logger/dashboard.py &") | crontab -
+echo "Creating log directory..."
+mkdir -p "$APP_DIR/logs"
 
-echo "✅ Setup complete. Reboot or run manually to start."
+# Create systemd service for dashboard
+DASHBOARD_SERVICE_FILE="/etc/systemd/system/aircraft-dashboard.service"
+if [ ! -f "$DASHBOARD_SERVICE_FILE" ]; then
+  echo "Setting up systemd service for dashboard..."
+  sudo tee "$DASHBOARD_SERVICE_FILE" > /dev/null <<EOL
+[Unit]
+Description=Aircraft Logger Dashboard
+After=network.target
+
+[Service]
+ExecStart=$PYTHON_BIN $APP_DIR/dashboard.py
+WorkingDirectory=$APP_DIR
+Restart=always
+User=pi
+Environment=FLASK_ENV=production
+
+[Install]
+WantedBy=multi-user.target
+EOL
+  sudo systemctl daemon-reexec
+  sudo systemctl daemon-reload
+  sudo systemctl enable aircraft-dashboard.service
+  sudo systemctl start aircraft-dashboard.service
+fi
+
+# Create systemd service for aircraft logger
+LOGGER_SERVICE_FILE="/etc/systemd/system/aircraft-logger.service"
+if [ ! -f "$LOGGER_SERVICE_FILE" ]; then
+  echo "Setting up systemd service for aircraft logger..."
+  sudo tee "$LOGGER_SERVICE_FILE" > /dev/null <<EOL
+[Unit]
+Description=Aircraft Logger Script
+After=network.target
+
+[Service]
+ExecStart=$PYTHON_BIN $APP_DIR/aircraft_logger.py
+WorkingDirectory=$APP_DIR
+Restart=always
+User=pi
+
+[Install]
+WantedBy=multi-user.target
+EOL
+  sudo systemctl daemon-reexec
+  sudo systemctl daemon-reload
+  sudo systemctl enable aircraft-logger.service
+  sudo systemctl start aircraft-logger.service
+fi
+
+# Add cron job for sending daily logs
+CRON_LINE="0 23 * * * $PYTHON_BIN $APP_DIR/send_log_email.py"
+(crontab -l 2>/dev/null | grep -v -F "$CRON_LINE"; echo "$CRON_LINE") | crontab -
+
+echo "Setup complete. Dashboard running on http://<your-pi-ip>:5000"
