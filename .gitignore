@@ -1,0 +1,12 @@
+# Ignore Python cache and venvs
+__pycache__/
+*.pyc
+aircraftenv/
+
+# Ignore logs and temporary files
+logs/
+*.log
+*.zip
+
+# Ignore sensitive config
+.env
