@@ -157,19 +157,11 @@
                 </div>
 
                 <div class="row g-4 mb-4">
-                    <div class="col-md-6">
+                    <div class="col-md-12">
                         <div class="card h-100">
                             <div class="card-body">
                                 <h5 class="card-title">Top Operators</h5>
                                 <canvas id="operatorsChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-6">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">Aircraft Distribution</h5>
-                                <canvas id="aircraftChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -189,7 +181,7 @@
                             <table class="table table-hover" id="aircraftTable">
                                 <thead>
                                     <tr>
-                                        <th onclick="sortTable(0)">Time (Local) <i class="bi bi-arrow-down-up"></i></th>
+                                        <th onclick="sortTable(0)" style="white-space: nowrap;">Time (Local) <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(1)">Hex <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(2)">Callsign <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(3)">Altitude <i class="bi bi-arrow-down-up"></i></th>
@@ -308,34 +300,6 @@
                         ticks: {
                             stepSize: 1
                         }
-                    }
-                }
-            }
-        });
-
-        // Aircraft Distribution Chart
-        new Chart(document.getElementById('aircraftChart'), {
-            type: 'doughnut',
-            data: {
-                labels: ['Unique Aircraft', 'Total Records'],
-                datasets: [{
-                    data: [{{ summary.unique_aircraft }}, {{ summary.total_aircraft }}],
-                    backgroundColor: [
-                        'rgba(75, 192, 192, 0.8)',
-                        'rgba(255, 99, 132, 0.8)'
-                    ],
-                    borderColor: [
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(255, 99, 132, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
                     }
                 }
             }
