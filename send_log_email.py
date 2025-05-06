@@ -3,7 +3,9 @@ from dotenv import load_dotenv
 import smtplib
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
+from email.mime.application import MIMEApplication
 from datetime import datetime
+import csv
 
 # Load environment variables
 load_dotenv()
@@ -23,8 +25,38 @@ def send_email():
         print(f"No log file found for {TODAY}")
         return
 
+    # Calculate summary
+    total_records = 0
+    unique_aircraft = set()
+    operator_counts = {}
+    model_counts = {}
     with open(LOG_FILE, "r") as f:
-        log_content = f.read()
+        reader = csv.DictReader(f)
+        for row in reader:
+            total_records += 1
+            unique_aircraft.add(row.get("Hex", ""))
+            operator = row.get("Operator", "")
+            if operator:
+                operator_counts[operator] = operator_counts.get(operator, 0) + 1
+            model = row.get("Model", "")
+            if model:
+                model_counts[model] = model_counts.get(model, 0) + 1
+    top_operators = sorted(operator_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+    top_models = sorted(model_counts.items(), key=lambda x: x[1], reverse=True)[:3]
+
+    summary_lines = [
+        f"Aircraft Log Summary for {TODAY}",
+        f"Total records: {total_records}",
+        f"Unique aircraft: {len(unique_aircraft)}",
+        "Top operators:",
+    ]
+    for op, count in top_operators:
+        summary_lines.append(f"  - {op}: {count}")
+    summary_lines.append("Top models:")
+    for model, count in top_models:
+        summary_lines.append(f"  - {model}: {count}")
+    summary_lines.append("\nSee attached aircraft log for today.")
+    summary_text = "\n".join(summary_lines)
 
     subject = f"Aircraft Log Report – {TODAY}"
     msg = MIMEMultipart()
@@ -32,8 +64,11 @@ def send_email():
     msg["To"] = EMAIL_RECIPIENT
     msg["Subject"] = subject
 
-    msg.attach(MIMEText("See attached aircraft log for today.\n\n", "plain"))
-    msg.attach(MIMEText(log_content, "plain"))
+    msg.attach(MIMEText(summary_text, "plain"))
+    with open(LOG_FILE, "rb") as f:
+        part = MIMEApplication(f.read(), Name=os.path.basename(LOG_FILE))
+    part['Content-Disposition'] = f'attachment; filename="{os.path.basename(LOG_FILE)}"'
+    msg.attach(part)
 
     try:
         server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
