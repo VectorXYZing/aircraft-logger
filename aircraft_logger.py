@@ -23,6 +23,7 @@ os.makedirs(LOG_DIR, exist_ok=True)
 # Metadata cache and logging throttle
 metadata_cache = {}
 last_logged_times = defaultdict(lambda: 0)
+last_logged_data = {}
 
 def get_today_log_path():
     filename = f"aircraft_log_{datetime.utcnow().date()}.csv"
@@ -65,22 +66,28 @@ def parse_message(message):
     parts = message.strip().split(',')
     if len(parts) < 22:
         return None
-
     hex_code = parts[4].strip()
     callsign = parts[10].strip()
     altitude = parts[11].strip()
     speed = parts[12].strip()
     lat = parts[14].strip()
     lon = parts[15].strip()
-
     return hex_code, callsign, altitude, speed, lat, lon
 
 def log_aircraft(data):
     hex_code = data[0]
     now = time.time()
+
+    # Only log if enough time has passed
     if now - last_logged_times[hex_code] < LOG_THROTTLE_SECONDS:
         return
+
+    # Check if data has changed since last log
+    if last_logged_data.get(hex_code) == data[1:]:
+        return
+
     last_logged_times[hex_code] = now
+    last_logged_data[hex_code] = data[1:]
 
     timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
     reg, model, operator = fetch_metadata(hex_code)

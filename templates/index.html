@@ -2,35 +2,55 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <title>Aircraft Dashboard</title>
+    <title>Aircraft Logger Dashboard</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body {
+            background-color: #f8f9fa;
+        }
+        .card-title i {
+            margin-right: 0.5rem;
+        }
+        .table-hover tbody tr:hover {
+            background-color: #e6f7ff;
+        }
+        th {
+            cursor: pointer;
+        }
+    </style>
 </head>
-<body class="bg-light">
+<body>
 <div class="container mt-4">
-    <h1 class="mb-4 text-center">Aircraft Logger Dashboard</h1>
+    <h1 class="mb-4 text-center">🛫 Aircraft Logger Dashboard</h1>
+
+    <form method="get" class="mb-4 d-flex justify-content-center">
+        <input type="date" name="date" class="form-control w-auto me-2"
+               value="{{ selected_date }}" max="{{ max_date }}">
+        <button type="submit" class="btn btn-primary">Load</button>
+    </form>
 
     {% if summary %}
     <div class="row mb-4">
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card text-bg-info shadow-sm">
                 <div class="card-body text-center">
-                    <h5 class="card-title">Total Logged Records</h5>
+                    <h5 class="card-title"><i class="bi bi-list-ul"></i>Total Logged Records</h5>
                     <p class="display-6">{{ summary.total_aircraft }}</p>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card shadow-sm">
+            <div class="card text-bg-success shadow-sm">
                 <div class="card-body text-center">
-                    <h5 class="card-title">Unique Aircraft</h5>
+                    <h5 class="card-title"><i class="bi bi-airplane-engines"></i>Unique Aircraft</h5>
                     <p class="display-6">{{ summary.unique_aircraft }}</p>
                 </div>
             </div>
         </div>
         <div class="col-md-4">
-            <div class="card shadow-sm">
-                <div class="card-body text-center">
-                    <h5 class="card-title">Top Operators</h5>
+            <div class="card text-bg-warning shadow-sm">
+                <div class="card-body">
+                    <h5 class="card-title text-center"><i class="bi bi-bar-chart-line"></i>Top Operators</h5>
                     <ul class="list-group list-group-flush">
                         {% for operator, count in summary.top_operators %}
                             <li class="list-group-item d-flex justify-content-between">
@@ -47,27 +67,27 @@
 
     <div class="card shadow">
         <div class="card-body">
-            <h5 class="card-title">Today’s Aircraft</h5>
+            <h5 class="card-title"><i class="bi bi-table"></i> Aircraft on {{ selected_date }}</h5>
             <div class="table-responsive">
-                <table class="table table-striped table-sm">
+                <table class="table table-striped table-hover table-sm" id="aircraftTable">
                     <thead class="table-light">
                         <tr>
-                            <th>Time (UTC)</th>
-                            <th>Hex</th>
-                            <th>Callsign</th>
-                            <th>Altitude</th>
-                            <th>Speed</th>
-                            <th>Latitude</th>
-                            <th>Longitude</th>
-                            <th>Registration</th>
-                            <th>Model</th>
-                            <th>Operator</th>
+                            <th onclick="sortTable(0)">Time (Local)</th>
+                            <th onclick="sortTable(1)">Hex</th>
+                            <th onclick="sortTable(2)">Callsign</th>
+                            <th onclick="sortTable(3)">Altitude</th>
+                            <th onclick="sortTable(4)">Speed</th>
+                            <th onclick="sortTable(5)">Latitude</th>
+                            <th onclick="sortTable(6)">Longitude</th>
+                            <th onclick="sortTable(7)">Registration</th>
+                            <th onclick="sortTable(8)">Model</th>
+                            <th onclick="sortTable(9)">Operator</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in data %}
                         <tr>
-                            <td>{{ row["Time UTC"] }}</td>
+                            <td>{{ row["Time Local"] }}</td>
                             <td>{{ row["Hex"] }}</td>
                             <td>{{ row["Callsign"] }}</td>
                             <td>{{ row["Altitude"] }}</td>
@@ -85,5 +105,48 @@
         </div>
     </div>
 </div>
+
+<!-- Bootstrap Icons CDN -->
+<link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+
+<!-- Sorting Script -->
+<script>
+function sortTable(n) {
+    const table = document.getElementById("aircraftTable");
+    const tbody = table.querySelector("tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    let dir = table.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
+    table.setAttribute("data-sort-dir", dir);
+
+    rows.sort((a, b) => {
+        let x = a.cells[n].textContent.trim();
+        let y = b.cells[n].textContent.trim();
+
+        // Handle date column
+        if (n === 0) {
+            x = new Date(x);
+            y = new Date(y);
+        } else {
+            // Try number comparison
+            let xNum = parseFloat(x);
+            let yNum = parseFloat(y);
+            if (!isNaN(xNum) && !isNaN(yNum)) {
+                x = xNum;
+                y = yNum;
+            } else {
+                x = x.toLowerCase();
+                y = y.toLowerCase();
+            }
+        }
+
+        if (x < y) return dir === "asc" ? -1 : 1;
+        if (x > y) return dir === "asc" ? 1 : -1;
+        return 0;
+    });
+
+    // Replace table body with sorted rows
+    rows.forEach(row => tbody.appendChild(row));
+}
+</script>
 </body>
 </html>
