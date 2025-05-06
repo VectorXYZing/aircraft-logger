@@ -2,27 +2,32 @@
 
 A lightweight aircraft logger and dashboard for Raspberry Pi that:
 
-- Captures ADS-B data from FR24/PiAware feeds
-- Enriches it with aircraft metadata using OpenSky
-- Logs to daily CSV files
-- Emails daily logs automatically
-- Hosts a web dashboard to explore sightings
+- Captures ADS-B data from FR24/PiAware feeds  
+- Enriches it with aircraft metadata using OpenSky (no API key needed)  
+- Logs to daily CSV files  
+- Emails daily logs automatically  
+- Hosts a stylish web dashboard to explore sightings  
 
 ## 🔧 Features
 
-- ADS-B message capture from `30003` port
-- Metadata enrichment from OpenSky (no API key required)
-- Caching to reduce lookups
-- Logs to `~/aircraft-logger/logs/aircraft_log_YYYY-MM-DD.csv`
-- Sends daily log email at 7pm (customisable via cron)
-- Web dashboard with filtering and styling
-- Setup via single script (`setup.sh`)
+- ADS-B message capture from `30003` port  
+- Metadata enrichment from OpenSky (no API key required)  
+- Caching to reduce lookups  
+- Logs to `~/aircraft-logger/logs/aircraft_log_YYYY-MM-DD.csv`  
+- Prevents duplicate log entries unless aircraft state has changed  
+- Sends daily log email at 7pm (customisable via cron)  
+- Web dashboard with:  
+  - Column sorting  
+  - Date picker (based on local time)  
+  - Summary metrics (unique aircraft, top operators, total messages)  
+  - Styled UI with pastel theme and icons  
+- Setup via single script (`setup.sh`)  
 
 ## 🖥️ Ideal for:
 
-- Hobbyists running aircraft feeders (PiAware/FR24)
-- People curious about what's flying overhead
-- Teaching basic data logging, APIs, dashboards
+- Hobbyists running aircraft feeders (PiAware/FR24)  
+- People curious about what's flying overhead  
+- Teaching basic data logging, APIs, dashboards  
 
 ## 📁 Project Structure
 
@@ -45,9 +50,9 @@ A lightweight aircraft logger and dashboard for Raspberry Pi that:
 
 ## 🧪 Prerequisites
 
-- Raspberry Pi or Linux system
-- ADS-B data stream (via FR24, PiAware, or similar)
-- Python 3.9+ (venv supported)
+- Raspberry Pi or Linux system  
+- ADS-B data stream (via FR24, PiAware, or similar)  
+- Python 3.9+ (venv supported)  
 
 ## 📦 Installation (Novice-Friendly)
 
@@ -97,35 +102,44 @@ You’ll see a live dashboard of aircraft data.
 ### Q: I don’t see metadata like aircraft model/operator?
 A: This feature uses the OpenSky API. Sometimes OpenSky may not have info for every hex code, especially for military/private planes.
 
+### Q: The time seems off — what’s going on?
+A: The dashboard uses your **local timezone** (e.g., AEST), but logs are saved in UTC. The dashboard correctly merges and presents logs by local date.
+
 ### Q: How do I stop the logger or dashboard?
+
 ```bash
 sudo systemctl stop aircraft-logger
 sudo systemctl stop aircraft-dashboard
 ```
 
 ### Q: How do I check if it’s working?
+
 ```bash
 systemctl status aircraft-logger
 journalctl -u aircraft-logger -n 50
 ```
 
 ### Q: How do I check the dashboard?
+
 ```bash
 systemctl status aircraft-dashboard
 ```
 
 ## 🚀 Roadmap Ideas
 
-- CSV viewer in dashboard
-- Heatmap / timeline of flights
-- Metadata history lookup cache
-- Export to Google Sheets or SQLite
+- CSV viewer in dashboard  
+- Heatmap / timeline of flights  
+- Metadata history lookup cache  
+- Export to Google Sheets or SQLite  
+- Flight paths / map view  
+- Alerts or filters by aircraft type or altitude  
 
 ## ✅ Status
 
-- Fully working, v1.0 stable.
-- Verified with FR24 + PiAware on Raspberry Pi 4.
-- Logs, dashboard, email all tested.
+- Fully working, v1.0 stable.  
+- Verified with FR24 + PiAware on Raspberry Pi 4.  
+- Logs, dashboard, email all tested and functioning.  
+- UI updated with pastel theme, iconography, and interactivity.  
 
 ---
 

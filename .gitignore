@@ -11,3 +11,4 @@ logs/
 # Ignore sensitive config
 .env
 .env
+logs/*.csv
