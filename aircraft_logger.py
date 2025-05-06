@@ -6,6 +6,8 @@ import requests
 from datetime import datetime
 from dotenv import load_dotenv
 from collections import defaultdict
+import logging
+from logging.handlers import RotatingFileHandler
 
 # Load environment variables
 load_dotenv()
@@ -17,8 +19,23 @@ LOG_DIR = os.path.expanduser('~/aircraft-logger/logs')
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
 
-# Ensure log directory exists
-os.makedirs(LOG_DIR, exist_ok=True)
+# Logging setup
+LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
+os.makedirs(LOGGING_DIR, exist_ok=True)
+LOG_FILE = os.path.join(LOGGING_DIR, 'aircraft_logger.log')
+logger = logging.getLogger('aircraft_logger')
+logger.setLevel(logging.INFO)
+formatter = logging.Formatter('%(asctime)s [%(levelname)s] %(message)s')
+
+# Rotating file handler (5MB per file, keep 3 backups)
+file_handler = RotatingFileHandler(LOG_FILE, maxBytes=5*1024*1024, backupCount=3)
+file_handler.setFormatter(formatter)
+logger.addHandler(file_handler)
+
+# Console handler
+console_handler = logging.StreamHandler()
+console_handler.setFormatter(formatter)
+logger.addHandler(console_handler)
 
 # Metadata cache and logging throttle
 metadata_cache = {}
@@ -32,9 +49,14 @@ def get_today_log_path():
 def ensure_log_file():
     path = get_today_log_path()
     if not os.path.exists(path):
-        with open(path, 'w', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(['Time UTC', 'Hex', 'Callsign', 'Altitude', 'Speed', 'Latitude', 'Longitude', 'Registration', 'Model', 'Operator'])
+        try:
+            with open(path, 'w', newline='') as f:
+                writer = csv.writer(f)
+                writer.writerow(['Time UTC', 'Hex', 'Callsign', 'Altitude', 'Speed', 'Latitude', 'Longitude', 'Registration', 'Model', 'Operator'])
+            logger.info(f"Created new log file: {path}")
+        except Exception as e:
+            logger.error(f"Failed to create log file {path}: {e}")
+            raise
     return path
 
 def fetch_metadata(hex_code):
@@ -57,8 +79,10 @@ def fetch_metadata(hex_code):
                 'timestamp': time.time()
             }
             return reg, model, operator
+        else:
+            logger.warning(f"Metadata fetch failed for {hex_code}: HTTP {response.status_code}")
     except Exception as e:
-        print(f"Metadata fetch failed for {hex_code}: {e}")
+        logger.error(f"Metadata fetch failed for {hex_code}: {e}")
 
     return '', '', ''
 
@@ -93,30 +117,35 @@ def log_aircraft(data):
     reg, model, operator = fetch_metadata(hex_code)
     row = [timestamp, hex_code, *data[1:], reg, model, operator]
 
-    with open(ensure_log_file(), 'a', newline='') as f:
-        writer = csv.writer(f)
-        writer.writerow(row)
-
-    print(f"Logged aircraft: {row}")
+    try:
+        with open(ensure_log_file(), 'a', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(row)
+        logger.info(f"Logged aircraft: {row}")
+    except Exception as e:
+        logger.error(f"Failed to log aircraft {row}: {e}")
 
 # Main loop
-print("Starting aircraft logger...")
+logger.info("Starting aircraft logger...")
 log_path = ensure_log_file()
-print(f"Logging to: {log_path}")
-print(f"Connecting to {HOST}:{PORT}...")
+logger.info(f"Logging to: {log_path}")
+logger.info(f"Connecting to {HOST}:{PORT}...")
 
 while True:
     try:
         with socket.create_connection((HOST, PORT)) as sock:
-            print("Connected. Listening for aircraft data...")
+            logger.info("Connected. Listening for aircraft data...")
             file = sock.makefile()
             for line in file:
                 parsed = parse_message(line)
                 if parsed:
-                    log_aircraft(parsed)
+                    try:
+                        log_aircraft(parsed)
+                    except Exception as e:
+                        logger.error(f"Error logging aircraft data: {e}")
     except (ConnectionRefusedError, socket.error) as e:
-        print(f"Connection failed: {e}. Retrying in 10 seconds...")
+        logger.error(f"Connection failed: {e}. Retrying in 10 seconds...")
         time.sleep(10)
     except Exception as e:
-        print(f"Unexpected error: {e}")
+        logger.error(f"Unexpected error: {e}")
         time.sleep(5)
