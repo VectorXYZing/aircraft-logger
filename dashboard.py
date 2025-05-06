@@ -21,6 +21,7 @@ def load_and_filter_csv(target_date_str):
     aircraft_data = []
     unique_hexes = set()
     operator_counts = Counter()
+    model_counts = Counter()
 
     target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
 
@@ -42,9 +43,12 @@ def load_and_filter_csv(target_date_str):
                 operator = row.get("Operator", "")
                 if operator:
                     operator_counts[operator] += 1
+                model = row.get("Model", "")
+                if model:
+                    model_counts[model] += 1
 
     aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
-    return aircraft_data, len(aircraft_data), len(unique_hexes), operator_counts.most_common(5)
+    return aircraft_data, len(aircraft_data), len(unique_hexes), operator_counts.most_common(5), model_counts.most_common(5)
 
 @app.route("/")
 def index():
@@ -52,12 +56,13 @@ def index():
     today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
     selected_date = date_str if date_str else today_local
 
-    data, total, unique, top_operators = load_and_filter_csv(selected_date)
+    data, total, unique, top_operators, top_models = load_and_filter_csv(selected_date)
 
     summary = {
         "total_aircraft": total,
         "unique_aircraft": unique,
-        "top_operators": top_operators
+        "top_operators": top_operators,
+        "top_models": top_models
     }
 
     return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local)

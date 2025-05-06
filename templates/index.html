@@ -157,11 +157,19 @@
                 </div>
 
                 <div class="row g-4 mb-4">
-                    <div class="col-md-12">
+                    <div class="col-md-6">
                         <div class="card h-100">
                             <div class="card-body">
                                 <h5 class="card-title">Top Operators</h5>
                                 <canvas id="operatorsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-md-6">
+                        <div class="card h-100">
+                            <div class="card-body">
+                                <h5 class="card-title">Model Distribution</h5>
+                                <canvas id="modelsChart"></canvas>
                             </div>
                         </div>
                     </div>
@@ -300,6 +308,39 @@
                         ticks: {
                             stepSize: 1
                         }
+                    }
+                }
+            }
+        });
+        // Model Distribution Doughnut Chart
+        new Chart(document.getElementById('modelsChart'), {
+            type: 'doughnut',
+            data: {
+                labels: {{ summary.top_models|map(attribute='0')|list|tojson }},
+                datasets: [{
+                    data: {{ summary.top_models|map(attribute='1')|list|tojson }},
+                    backgroundColor: [
+                        'rgba(255, 99, 132, 0.7)',
+                        'rgba(54, 162, 235, 0.7)',
+                        'rgba(255, 206, 86, 0.7)',
+                        'rgba(75, 192, 192, 0.7)',
+                        'rgba(153, 102, 255, 0.7)'
+                    ],
+                    borderColor: [
+                        'rgba(255, 99, 132, 1)',
+                        'rgba(54, 162, 235, 1)',
+                        'rgba(255, 206, 86, 1)',
+                        'rgba(75, 192, 192, 1)',
+                        'rgba(153, 102, 255, 1)'
+                    ],
+                    borderWidth: 1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        position: 'bottom'
                     }
                 }
             }
