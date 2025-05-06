@@ -205,15 +205,15 @@
                                     {% for row in data %}
                                     <tr>
                                         <td><span style="white-space: nowrap;">{{ row["Time Local"] }}</span></td>
-                                        <td>{{ row["Hex"] }}</td>
-                                        <td>{{ row["Callsign"] }}</td>
-                                        <td>{{ row["Altitude"] }} ft</td>
-                                        <td>{{ row["Speed"] }} kts</td>
-                                        <td>{{ row["Latitude"] }}</td>
-                                        <td>{{ row["Longitude"] }}</td>
-                                        <td>{{ row.get("Registration", "") }}</td>
-                                        <td>{{ row.get("Model", "") }}</td>
-                                        <td>{{ row.get("Operator", "") }}</td>
+                                        <td><span style="white-space: nowrap;">{{ row["Hex"] }}</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row["Callsign"] }}</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row["Altitude"] }} ft</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row["Speed"] }} kts</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row["Latitude"] }}</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row["Longitude"] }}</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row.get("Registration", "") }}</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row.get("Model", "") }}</span></td>
+                                        <td><span style="white-space: nowrap;">{{ row.get("Operator", "") }}</span></td>
                                     </tr>
                                     {% endfor %}
                                 </tbody>
