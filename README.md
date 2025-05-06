@@ -136,7 +136,7 @@ systemctl status aircraft-dashboard
 
 ## ✅ Status
 
-- Fully working, v1.0 stable.  
+- Fully working, v1.1 stable.  
 - Verified with FR24 + PiAware on Raspberry Pi 4.  
 - Logs, dashboard, email all tested and functioning.  
 - UI updated with pastel theme, iconography, and interactivity.  
