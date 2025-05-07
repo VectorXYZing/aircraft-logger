@@ -393,6 +393,25 @@ function sortTable(n) {
         document.querySelector('form').addEventListener('submit', function() {
             document.querySelector('.loading').classList.add('active');
         });
+
+        // Hide scroll indicator at end of table
+        document.addEventListener('DOMContentLoaded', function() {
+            const tableResponsive = document.querySelector('.table-responsive');
+            const indicator = document.querySelector('.table-scroll-indicator');
+            if (tableResponsive && indicator) {
+                function updateIndicator() {
+                    const maxScroll = tableResponsive.scrollWidth - tableResponsive.clientWidth;
+                    if (tableResponsive.scrollLeft >= maxScroll - 2) {
+                        indicator.style.display = 'none';
+                    } else {
+                        indicator.style.display = '';
+                    }
+                }
+                tableResponsive.addEventListener('scroll', updateIndicator);
+                window.addEventListener('resize', updateIndicator);
+                updateIndicator();
+            }
+        });
 </script>
 </body>
 </html>
