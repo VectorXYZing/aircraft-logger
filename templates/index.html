@@ -10,6 +10,11 @@
     <style>
         :root {
             --bs-body-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            --scroll-indicator-bg: #fff;
+        }
+        
+        [data-bs-theme="dark"] {
+            --scroll-indicator-bg: #212529;
         }
         
         body {
@@ -109,7 +114,7 @@
             top: 0;
             height: 100%;
             width: 32px;
-            background: linear-gradient(to left, #fff 60%, transparent 100%);
+            background: linear-gradient(to left, var(--scroll-indicator-bg) 60%, transparent 100%);
             pointer-events: none;
             z-index: 10;
         }
