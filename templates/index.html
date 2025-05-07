@@ -122,33 +122,33 @@
 
                 <form method="get" class="mb-4 d-flex justify-content-center gap-2">
                     <input type="date" name="date" class="form-control w-auto"
-                           value="{{ selected_date }}" max="{{ max_date }}">
+               value="{{ selected_date }}" max="{{ max_date }}">
                     <button type="submit" class="btn btn-primary">
                         <i class="bi bi-search"></i> Load
                     </button>
-                </form>
+    </form>
 
-                {% if summary %}
+    {% if summary %}
                 <div class="row g-4 mb-4">
-                    <div class="col-md-4">
+        <div class="col-md-4">
                         <div class="card stat-card bg-primary text-white">
                             <div class="card-body">
                                 <div class="stat-value">{{ summary.total_aircraft }}</div>
                                 <div class="stat-label">Total Records</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
                         <div class="card stat-card bg-success text-white">
                             <div class="card-body">
                                 <div class="stat-value">{{ summary.unique_aircraft }}</div>
                                 <div class="stat-label">Unique Aircraft</div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
+                </div>
+            </div>
+        </div>
+        <div class="col-md-4">
                         <div class="card stat-card bg-info text-white">
-                            <div class="card-body">
+                <div class="card-body">
                                 <div class="stat-value">{{ summary.top_operators|length }}</div>
                                 <div class="stat-label">Top Operators</div>
                             </div>
@@ -170,14 +170,14 @@
                             <div class="card-body">
                                 <h5 class="card-title">Model Distribution</h5>
                                 <canvas id="modelsChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
                 </div>
-                {% endif %}
+            </div>
+        </div>
+    </div>
+    {% endif %}
 
                 <div class="card shadow-sm">
-                    <div class="card-body">
+        <div class="card-body">
                         <div class="d-flex justify-content-between align-items-center mb-3">
                             <h5 class="card-title mb-0">Aircraft on {{ selected_date }}</h5>
                             <div class="search-box">
@@ -185,10 +185,10 @@
                                        placeholder="Search aircraft...">
                             </div>
                         </div>
-                        <div class="table-responsive">
+            <div class="table-responsive">
                             <table class="table table-hover" id="aircraftTable">
                                 <thead>
-                                    <tr>
+                        <tr>
                                         <th onclick="sortTable(0)" style="white-space: nowrap;">Time (Local) <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(1)">Hex <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(2)">Callsign <i class="bi bi-arrow-down-up"></i></th>
@@ -199,11 +199,12 @@
                                         <th onclick="sortTable(7)">Registration <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(8)">Model <i class="bi bi-arrow-down-up"></i></th>
                                         <th onclick="sortTable(9)">Operator <i class="bi bi-arrow-down-up"></i></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for row in data %}
-                                    <tr>
+                                        <th>FlightRadar24</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for row in data %}
+                        <tr>
                                         <td><span style="white-space: nowrap;">{{ row["Time Local"] }}</span></td>
                                         <td><span style="white-space: nowrap;">{{ row["Hex"] }}</span></td>
                                         <td><span style="white-space: nowrap;">{{ row["Callsign"] }}</span></td>
@@ -214,19 +215,28 @@
                                         <td><span style="white-space: nowrap;">{{ row.get("Registration", "") }}</span></td>
                                         <td><span style="white-space: nowrap;">{{ row.get("Model", "") }}</span></td>
                                         <td><span style="white-space: nowrap;">{{ row.get("Operator", "") }}</span></td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
+                                        <td>
+                                            {% if row.get("Registration") %}
+                                            <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}" 
+                                               target="_blank" 
+                                               class="btn btn-sm btn-outline-primary">
+                                                <i class="bi bi-airplane"></i> View
+                                            </a>
+                                            {% endif %}
+                                        </td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
                         </div>
                     </div>
-                </div>
             </div>
         </div>
     </div>
+</div>
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script>
+<script>
         // Theme switching
         function toggleTheme() {
             const html = document.documentElement;
@@ -237,37 +247,37 @@
         }
 
         // Table sorting
-        function sortTable(n) {
-            const table = document.getElementById("aircraftTable");
-            const tbody = table.querySelector("tbody");
-            const rows = Array.from(tbody.querySelectorAll("tr"));
-            let dir = table.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
-            table.setAttribute("data-sort-dir", dir);
+function sortTable(n) {
+    const table = document.getElementById("aircraftTable");
+    const tbody = table.querySelector("tbody");
+    const rows = Array.from(tbody.querySelectorAll("tr"));
+    let dir = table.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
+    table.setAttribute("data-sort-dir", dir);
 
-            rows.sort((a, b) => {
-                let x = a.cells[n].textContent.trim();
-                let y = b.cells[n].textContent.trim();
+    rows.sort((a, b) => {
+        let x = a.cells[n].textContent.trim();
+        let y = b.cells[n].textContent.trim();
 
-                if (n === 0) {
-                    x = new Date(x);
-                    y = new Date(y);
-                } else {
-                    let xNum = parseFloat(x);
-                    let yNum = parseFloat(y);
-                    if (!isNaN(xNum) && !isNaN(yNum)) {
-                        x = xNum;
-                        y = yNum;
-                    } else {
-                        x = x.toLowerCase();
-                        y = y.toLowerCase();
-                    }
-                }
+        if (n === 0) {
+            x = new Date(x);
+            y = new Date(y);
+        } else {
+            let xNum = parseFloat(x);
+            let yNum = parseFloat(y);
+            if (!isNaN(xNum) && !isNaN(yNum)) {
+                x = xNum;
+                y = yNum;
+            } else {
+                x = x.toLowerCase();
+                y = y.toLowerCase();
+            }
+        }
 
                 return dir === "asc" ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0);
-            });
+    });
 
-            rows.forEach(row => tbody.appendChild(row));
-        }
+    rows.forEach(row => tbody.appendChild(row));
+}
 
         // Search functionality
         document.getElementById('searchInput').addEventListener('input', function(e) {
@@ -351,6 +361,6 @@
         document.querySelector('form').addEventListener('submit', function() {
             document.querySelector('.loading').classList.add('active');
         });
-    </script>
+</script>
 </body>
 </html>
