@@ -224,7 +224,6 @@
                             <th onclick="sortTable(7)">Registration <i class="bi bi-arrow-down-up"></i></th>
                             <th onclick="sortTable(8)">Model <i class="bi bi-arrow-down-up"></i></th>
                             <th onclick="sortTable(9)">Operator <i class="bi bi-arrow-down-up"></i></th>
-                            <th>FlightRadar24</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -242,10 +241,11 @@
                             <td><span style="white-space: nowrap;">{{ row.get("Operator", "") }}</span></td>
                             <td>
                                 {% if row.get("Registration") %}
-                                <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}" 
-                                   target="_blank" 
-                                   class="btn btn-sm btn-outline-primary">
-                                    <i class="bi bi-airplane"></i> View
+                                <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}"
+                                   target="_blank"
+                                   class="btn btn-sm btn-primary d-inline-flex align-items-center"
+                                   style="font-weight:600;">
+                                  <i class="bi bi-airplane me-1"></i> {{ row.get("Registration") }}
                                 </a>
                                 {% endif %}
                             </td>
