@@ -102,6 +102,29 @@
             right: 1rem;
             z-index: 1000;
         }
+
+        .table-scroll-indicator {
+            position: absolute;
+            right: 0;
+            top: 0;
+            height: 100%;
+            width: 32px;
+            background: linear-gradient(to left, #fff 60%, transparent 100%);
+            pointer-events: none;
+            z-index: 10;
+        }
+
+        @media (max-width: 768px) {
+            .stat-value {
+                font-size: 2rem;
+            }
+            .table-responsive {
+                font-size: 0.875rem;
+            }
+            .table-scroll-indicator {
+                width: 24px;
+            }
+        }
     </style>
 </head>
 <body>
@@ -185,51 +208,51 @@
                                        placeholder="Search aircraft...">
                             </div>
                         </div>
-            <div class="table-responsive">
-                            <table class="table table-hover" id="aircraftTable">
-                                <thead>
+            <div class="table-responsive position-relative">
+                <p class="text-muted mb-1">Scroll right to see more columns &rarr;</p>
+                <div class="table-scroll-indicator"></div>
+                <table class="table table-hover" id="aircraftTable">
+                    <thead>
                         <tr>
-                                        <th onclick="sortTable(0)" style="white-space: nowrap;">Time (Local) <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(1)">Hex <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(2)">Callsign <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(3)">Altitude <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(4)">Speed <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(5)">Latitude <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(6)">Longitude <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(7)">Registration <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(8)">Model <i class="bi bi-arrow-down-up"></i></th>
-                                        <th onclick="sortTable(9)">Operator <i class="bi bi-arrow-down-up"></i></th>
-                                        <th>FlightRadar24</th>
+                            <th onclick="sortTable(0)" style="white-space: nowrap;">Time (Local) <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(1)">Hex <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(2)">Callsign <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(3)">Altitude <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(4)">Speed <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(5)">Latitude <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(6)">Longitude <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(7)">Registration <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(8)">Model <i class="bi bi-arrow-down-up"></i></th>
+                            <th onclick="sortTable(9)">Operator <i class="bi bi-arrow-down-up"></i></th>
+                            <th>FlightRadar24</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for row in data %}
                         <tr>
-                                        <td><span style="white-space: nowrap;">{{ row["Time Local"] }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row["Hex"] }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row["Callsign"] }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row["Altitude"] }} ft</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row["Speed"] }} kts</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row["Latitude"] }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row["Longitude"] }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row.get("Registration", "") }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row.get("Model", "") }}</span></td>
-                                        <td><span style="white-space: nowrap;">{{ row.get("Operator", "") }}</span></td>
-                                        <td>
-                                            {% if row.get("Registration") %}
-                                            <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}" 
-                                               target="_blank" 
-                                               class="btn btn-sm btn-outline-primary">
-                                                <i class="bi bi-airplane"></i> View
-                                            </a>
-                                            {% endif %}
-                                        </td>
+                            <td><span style="white-space: nowrap;">{{ row["Time Local"] }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row["Hex"] }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row["Callsign"] }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row["Altitude"] }} ft</span></td>
+                            <td><span style="white-space: nowrap;">{{ row["Speed"] }} kts</span></td>
+                            <td><span style="white-space: nowrap;">{{ row["Latitude"] }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row["Longitude"] }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row.get("Registration", "") }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row.get("Model", "") }}</span></td>
+                            <td><span style="white-space: nowrap;">{{ row.get("Operator", "") }}</span></td>
+                            <td>
+                                {% if row.get("Registration") %}
+                                <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}" 
+                                   target="_blank" 
+                                   class="btn btn-sm btn-outline-primary">
+                                    <i class="bi bi-airplane"></i> View
+                                </a>
+                                {% endif %}
+                            </td>
                         </tr>
                         {% endfor %}
                     </tbody>
                 </table>
-                        </div>
-                    </div>
             </div>
         </div>
     </div>
