@@ -24,6 +24,14 @@ A lightweight aircraft logger and dashboard for Raspberry Pi that:
   - FlightRadar24 links for each aircraft
 - Setup via single script (`setup.sh`)  
 
+## 📸 Screenshots
+
+### Aircraft Table View
+![Aircraft Table](docs/dashboard-table.png)
+
+### Dashboard Summary & Charts
+![Dashboard Summary](docs/dashboard-summary.png)
+
 ## 🖥️ Ideal for:
 
 - Hobbyists running aircraft feeders (PiAware/FR24)  
