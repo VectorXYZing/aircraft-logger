@@ -51,7 +51,7 @@ def send_email():
     operator_counts = {}
     model_counts = {}
     try:
-        with open(LOG_FILE, "r") as f:
+    with open(LOG_FILE, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 total_records += 1

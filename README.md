@@ -21,6 +21,7 @@ A lightweight aircraft logger and dashboard for Raspberry Pi that:
   - Date picker (based on local time)  
   - Summary metrics (unique aircraft, top operators, total messages)  
   - Styled UI with pastel theme and icons  
+  - FlightRadar24 links for each aircraft
 - Setup via single script (`setup.sh`)  
 
 ## 🖥️ Ideal for:
@@ -40,7 +41,7 @@ A lightweight aircraft logger and dashboard for Raspberry Pi that:
 │   └── index.html           # HTML template for dashboard
 ├── static/
 │   ├── style.css            # Dashboard CSS styling
-│   └── script.js            # Dashboard interactivity (optional)
+│   └── script.js            # Dashboard interactivity
 ├── logs/                    # Daily aircraft logs stored here
 ├── .env                     # Local config (ignored by git)
 ├── .gitignore
@@ -53,29 +54,37 @@ A lightweight aircraft logger and dashboard for Raspberry Pi that:
 - Raspberry Pi or Linux system  
 - ADS-B data stream (via FR24, PiAware, or similar)  
 - Python 3.9+ (venv supported)  
+- System packages: python3-full, python3-pip, python3-venv, git
 
 ## 📦 Installation (Novice-Friendly)
 
-1. **Clone the repo** (on your Pi or system with FR24/PiAware):
+1. **Verify ADS-B Feed** (if using FR24/PiAware):
+```bash
+netstat -tuln | grep 30003
+```
+You should see port 30003 listening.
 
+2. **Clone the repo**:
 ```bash
 git clone https://github.com/VectorXYZing/aircraft-logger.git
 cd aircraft-logger
 ```
 
-2. **Run setup script**
-
+3. **Run setup script**:
 ```bash
 chmod +x setup.sh
 ./setup.sh
 ```
+This will:
+- Install system dependencies
+- Create Python virtual environment
+- Install required packages
+- Set up systemd services
+- Configure daily email reports
+- Verify services are running
 
-This installs dependencies, sets up cron and systemd services, and prepares the environment.
-
-3. **Create `.env` file manually**
-
-This file holds your private email config for daily log emails. Create `.env` in the root folder (`~/aircraft-logger/.env`) with the following contents:
-
+4. **Configure Email** (if needed):
+The setup script creates a `.env` template. Edit it with your email settings:
 ```
 EMAIL_FROM=your_email@example.com
 EMAIL_TO=recipient_email@example.com
@@ -85,44 +94,76 @@ EMAIL_USER=your_email_username
 EMAIL_PASSWORD=your_email_password
 ```
 
-📌 _This file is private and should **never** be uploaded to GitHub. It's excluded via `.gitignore`._
-
-4. **View the dashboard**
-
-Once setup is complete, visit:
-
+5. **Access the Dashboard**:
 ```
 http://<your-raspberry-pi-ip>:5000
 ```
 
-You’ll see a live dashboard of aircraft data.
+## 🛠️ Troubleshooting
 
-## 🧠 Common Questions (Novice Help)
+### Service Issues
 
-### Q: I don’t see metadata like aircraft model/operator?
+1. **Check service status**:
+```bash
+sudo systemctl status aircraft-logger
+sudo systemctl status aircraft-dashboard
+```
+
+2. **View service logs**:
+```bash
+journalctl -u aircraft-logger -f
+journalctl -u aircraft-dashboard -f
+```
+
+3. **Restart services**:
+```bash
+sudo systemctl restart aircraft-logger
+sudo systemctl restart aircraft-dashboard
+```
+
+### Common Problems
+
+1. **Missing Python packages**:
+```bash
+cd ~/aircraft-logger
+source venv/bin/activate
+pip install -r requirements.txt
+```
+
+2. **Port 30003 not available**:
+```bash
+# Check if FR24/PiAware is running
+sudo systemctl status fr24feed
+sudo systemctl status piaware
+```
+
+3. **Dashboard not accessible**:
+- Verify port 5000 is not in use: `sudo lsof -i :5000`
+- Check firewall settings: `sudo ufw status`
+
+4. **No aircraft data**:
+- Verify ADS-B feed: `netstat -tuln | grep 30003`
+- Check logger output: `journalctl -u aircraft-logger -f`
+
+## 🧠 Common Questions
+
+### Q: I don't see metadata like aircraft model/operator?
 A: This feature uses the OpenSky API. Sometimes OpenSky may not have info for every hex code, especially for military/private planes.
 
-### Q: The time seems off — what’s going on?
+### Q: The time seems off — what's going on?
 A: The dashboard uses your **local timezone** (e.g., AEST), but logs are saved in UTC. The dashboard correctly merges and presents logs by local date.
 
-### Q: How do I stop the logger or dashboard?
-
+### Q: How do I stop the services?
 ```bash
 sudo systemctl stop aircraft-logger
 sudo systemctl stop aircraft-dashboard
 ```
 
-### Q: How do I check if it’s working?
-
+### Q: How do I update the software?
 ```bash
-systemctl status aircraft-logger
-journalctl -u aircraft-logger -n 50
-```
-
-### Q: How do I check the dashboard?
-
-```bash
-systemctl status aircraft-dashboard
+cd ~/aircraft-logger
+git pull
+./setup.sh
 ```
 
 ## 🚀 Roadmap Ideas
@@ -136,10 +177,12 @@ systemctl status aircraft-dashboard
 
 ## ✅ Status
 
-- Fully working, v1.1 stable.  
-- Verified with FR24 + PiAware on Raspberry Pi 4.  
-- Logs, dashboard, email all tested and functioning.  
-- UI updated with pastel theme, iconography, and interactivity.  
+- Fully working, v1.2 stable
+- Verified with FR24 + PiAware on Raspberry Pi 4
+- Improved installation process
+- Enhanced error handling
+- Added FlightRadar24 integration
+- Updated UI with dark mode support
 
 ---
 

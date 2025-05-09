@@ -50,9 +50,9 @@ def ensure_log_file():
     path = get_today_log_path()
     if not os.path.exists(path):
         try:
-            with open(path, 'w', newline='') as f:
-                writer = csv.writer(f)
-                writer.writerow(['Time UTC', 'Hex', 'Callsign', 'Altitude', 'Speed', 'Latitude', 'Longitude', 'Registration', 'Model', 'Operator'])
+        with open(path, 'w', newline='') as f:
+            writer = csv.writer(f)
+            writer.writerow(['Time UTC', 'Hex', 'Callsign', 'Altitude', 'Speed', 'Latitude', 'Longitude', 'Registration', 'Model', 'Operator'])
             logger.info(f"Created new log file: {path}")
         except Exception as e:
             logger.error(f"Failed to create log file {path}: {e}")
@@ -118,9 +118,9 @@ def log_aircraft(data):
     row = [timestamp, hex_code, *data[1:], reg, model, operator]
 
     try:
-        with open(ensure_log_file(), 'a', newline='') as f:
-            writer = csv.writer(f)
-            writer.writerow(row)
+    with open(ensure_log_file(), 'a', newline='') as f:
+        writer = csv.writer(f)
+        writer.writerow(row)
         logger.info(f"Logged aircraft: {row}")
     except Exception as e:
         logger.error(f"Failed to log aircraft {row}: {e}")
@@ -140,7 +140,7 @@ while True:
                 parsed = parse_message(line)
                 if parsed:
                     try:
-                        log_aircraft(parsed)
+                    log_aircraft(parsed)
                     except Exception as e:
                         logger.error(f"Error logging aircraft data: {e}")
     except (ConnectionRefusedError, socket.error) as e:

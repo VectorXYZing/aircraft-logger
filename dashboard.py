@@ -44,31 +44,31 @@ def load_and_filter_csv(target_date_str):
     model_counts = Counter()
 
     try:
-        target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
+    target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
     except Exception as e:
         logger.error(f"Invalid date format: {target_date_str} - {e}")
         return [], 0, 0, [], []
 
     try:
-        for filename in os.listdir(LOG_DIR):
-            if not filename.endswith(".csv"):
-                continue
-            filepath = os.path.join(LOG_DIR, filename)
+    for filename in os.listdir(LOG_DIR):
+        if not filename.endswith(".csv"):
+            continue
+        filepath = os.path.join(LOG_DIR, filename)
             try:
-                with open(filepath, newline='') as csvfile:
-                    reader = csv.DictReader(csvfile)
-                    for row in reader:
-                        local_time = convert_to_local(row["Time UTC"])
-                        if not local_time:
-                            continue
-                        if local_time.date() != target_date:
-                            continue
-                        row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
-                        aircraft_data.append(row)
-                        unique_hexes.add(row["Hex"])
-                        operator = row.get("Operator", "")
-                        if operator:
-                            operator_counts[operator] += 1
+        with open(filepath, newline='') as csvfile:
+            reader = csv.DictReader(csvfile)
+            for row in reader:
+                local_time = convert_to_local(row["Time UTC"])
+                if not local_time:
+                    continue
+                if local_time.date() != target_date:
+                    continue
+                row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
+                aircraft_data.append(row)
+                unique_hexes.add(row["Hex"])
+                operator = row.get("Operator", "")
+                if operator:
+                    operator_counts[operator] += 1
                         model = row.get("Model", "")
                         if model:
                             model_counts[model] += 1
@@ -84,20 +84,20 @@ def load_and_filter_csv(target_date_str):
 @app.route("/")
 def index():
     try:
-        date_str = request.args.get("date")
-        today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
-        selected_date = date_str if date_str else today_local
+    date_str = request.args.get("date")
+    today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
+    selected_date = date_str if date_str else today_local
 
         data, total, unique, top_operators, top_models = load_and_filter_csv(selected_date)
 
-        summary = {
-            "total_aircraft": total,
-            "unique_aircraft": unique,
+    summary = {
+        "total_aircraft": total,
+        "unique_aircraft": unique,
             "top_operators": top_operators,
             "top_models": top_models
-        }
+    }
 
-        return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local)
+    return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local)
     except Exception as e:
         logger.error(f"Error in dashboard route: {e}")
         return "An error occurred while loading the dashboard.", 500
