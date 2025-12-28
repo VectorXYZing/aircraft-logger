@@ -51,11 +51,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/aircraft-logger
-Environment="PATH=/home/pi/aircraft-logger/venv/bin"
-ExecStart=/home/pi/aircraft-logger/venv/bin/python /home/pi/aircraft-logger/aircraft_logger.py
+User=ps
+Group=ps
+WorkingDirectory=/home/ps/aircraft-logger
+Environment="PATH=/home/ps/aircraft-logger/venv/bin"
+ExecStart=/home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/aircraft_logger.py
 Restart=always
 RestartSec=10
 Environment="PYTHONUNBUFFERED=1"
@@ -73,11 +73,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=pi
-Group=pi
-WorkingDirectory=/home/pi/aircraft-logger
-Environment="PATH=/home/pi/aircraft-logger/venv/bin"
-ExecStart=/home/pi/aircraft-logger/venv/bin/python /home/pi/aircraft-logger/dashboard.py
+User=ps
+Group=ps
+WorkingDirectory=/home/ps/aircraft-logger
+Environment="PATH=/home/ps/aircraft-logger/venv/bin"
+ExecStart=/home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/dashboard.py
 Restart=always
 RestartSec=10
 Environment="PYTHONUNBUFFERED=1"
@@ -96,7 +96,7 @@ sudo systemctl restart aircraft-dashboard.service
 
 # Set up daily cron job for emailing logs
 echo "📅 Setting up cron job for daily email report..."
-(crontab -l 2>/dev/null | grep -v send_log_email.py ; echo "0 19 * * * /home/pi/aircraft-logger/venv/bin/python /home/pi/aircraft-logger/send_log_email.py") | crontab -
+(crontab -l 2>/dev/null | grep -v send_log_email.py ; echo "0 19 * * * /home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/send_log_email.py") | crontab -
 
 # Verify services are running
 echo "🔍 Verifying services..."

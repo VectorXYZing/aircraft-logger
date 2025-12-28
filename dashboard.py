@@ -28,7 +28,7 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-LOG_DIR = "/home/pi/aircraft-logger/logs"
+LOG_DIR = "/home/ps/aircraft-logger/logs"
 LOCAL_TZ = pytz.timezone("Australia/Melbourne")
 
 def convert_to_local(utc_str):
