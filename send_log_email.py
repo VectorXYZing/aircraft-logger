@@ -8,6 +8,7 @@ from datetime import datetime
 import csv
 import logging
 from logging.handlers import RotatingFileHandler
+import sys
 
 # Load environment variables
 load_dotenv()
@@ -19,7 +20,11 @@ EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
 EMAIL_RECIPIENT = os.getenv("EMAIL_TO")
 
 LOG_DIR = os.path.expanduser("~/aircraft-logger/logs")
-TODAY = datetime.utcnow().strftime("%Y-%m-%d")
+# Allow date override via command line argument
+if len(sys.argv) > 1:
+    TODAY = sys.argv[1]
+else:
+    TODAY = datetime.utcnow().strftime("%Y-%m-%d")
 LOG_FILE = os.path.join(LOG_DIR, f"aircraft_log_{TODAY}.csv")
 
 # Logging setup
