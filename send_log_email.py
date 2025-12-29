@@ -12,11 +12,11 @@ from logging.handlers import RotatingFileHandler
 # Load environment variables
 load_dotenv()
 
-EMAIL_HOST = os.getenv("EMAIL_HOST")
-EMAIL_PORT = int(os.getenv("EMAIL_PORT", 587))
-EMAIL_ADDRESS = os.getenv("EMAIL_ADDRESS")
+EMAIL_HOST = os.getenv("SMTP_SERVER")
+EMAIL_PORT = int(os.getenv("SMTP_PORT", 587))
+EMAIL_ADDRESS = os.getenv("EMAIL_USER")
 EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-EMAIL_RECIPIENT = os.getenv("EMAIL_RECIPIENT")
+EMAIL_RECIPIENT = os.getenv("EMAIL_TO")
 
 LOG_DIR = os.path.expanduser("~/aircraft-logger/logs")
 TODAY = datetime.utcnow().strftime("%Y-%m-%d")
@@ -51,7 +51,7 @@ def send_email():
     operator_counts = {}
     model_counts = {}
     try:
-    with open(LOG_FILE, "r") as f:
+        with open(LOG_FILE, "r") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 total_records += 1
