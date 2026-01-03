@@ -19,12 +19,7 @@ load_dotenv()
 # Constants
 HOST = '127.0.0.1'
 PORT = 30003
-LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
-# Comma-separated list of metadata URL templates. Use '{hex}' where the ICAO hex should be substituted.
-# Example to use OpenSky (default):
-#   https://opensky-network.org/api/metadata/aircraft/icao/{hex}
-# To use ADSB.lol, set AIRLOGGER_METADATA_URLS in the environment to an ADSB.lol template.
-METADATA_URL_TEMPLATE = os.environ.get('AIRLOGGER_METADATA_URL', 'https://api.adsb.lol/v2/icao/{hex}')
+LOG_DIR = os.path.expanduser('~/aircraft-logger/logs')
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
 SOCKET_TIMEOUT = 30  # Socket timeout in seconds
@@ -38,8 +33,7 @@ THROTTLE_CLEANUP_INTERVAL = 3600  # Clean throttle dicts every hour
 MAX_THROTTLE_ENTRIES = 5000  # Maximum throttle entries
 
 # Logging setup
-# Allow overriding the logs directory via environment (useful for different service users)
-LOGGING_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
+LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
 os.makedirs(LOGGING_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGGING_DIR, 'aircraft_logger.log')
 logger = logging.getLogger('aircraft_logger')
@@ -58,10 +52,7 @@ logger.addHandler(console_handler)
 
 # Global state
 metadata_cache = {}
-# Track failures + backoff per hex to avoid hammering the metadata API when network is down
 metadata_failures = {}
-# Host-level backoff to avoid repeating network failures for every hex
-metadata_host_failure = {}
 last_logged_times = defaultdict(lambda: 0)
 last_logged_data = {}
 running = True
@@ -244,38 +235,21 @@ def cleanup_cache():
     logger.info(f"Cache cleanup complete (new size: {len(metadata_cache)})")
 
 def fetch_metadata(hex_code):
-    # Allow disabling metadata lookups via env for quick mitigation
-    if os.environ.get('AIRLOGGER_DISABLE_METADATA', '').lower() in ('1', 'true', 'yes'):
-        return '', '', ''
+    """Fetch metadata for a given hex from ADSB.lol v2 and cache it.
 
-    # Return cached positive metadata if still fresh
-    now = time.time()
+    Returns (registration, model, operator, callsign)
+    """
     cached = metadata_cache.get(hex_code)
-    if cached and now - cached['timestamp'] < CACHE_TTL:
-        return cached['registration'], cached['model'], cached['operator']
+    if cached and time.time() - cached['timestamp'] < CACHE_TTL:
+        return cached.get('registration', ''), cached.get('model', ''), cached.get('operator', ''), cached.get('callsign', '')
 
-    # If host-level failure recorded, respect its backoff first
-    host_fail = metadata_host_failure.get('state')
-    if host_fail and now < host_fail.get('next_try', 0):
-        logger.info("Skipping metadata fetch due to host-level backoff")
-        return '', '', ''
-
-    # If we previously recorded failures for this hex, check per-hex backoff
-    failure = metadata_failures.get(hex_code)
-    if failure and now < failure.get('next_try', 0):
-        # Respect negative cache/backoff - return empty results
-        logger.debug(f"Skipping metadata fetch for {hex_code}, next_try={failure.get('next_try')}")
-        return '', '', ''
-
-    # Use the single configured ADSB.lol v2 endpoint
-    backoff = 60
-    host_error = False
-    tmpl = METADATA_URL_TEMPLATE
+    # ADSB.lol v2 endpoint
+    tmpl = os.environ.get('AIRLOGGER_METADATA_URL', 'https://api.adsb.lol/v2/icao/{hex}')
     try:
         try:
             candidate = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
         except Exception:
-            candidate = tmpl.replace('{hex}', hex_code).replace('{hex_lower}', hex_code.lower()).replace('{hex_upper}', hex_code.upper())
+            candidate = tmpl.replace('{hex}', hex_code)
 
         response = requests.get(candidate, timeout=5)
         if response.status_code != 200:
@@ -290,6 +264,7 @@ def fetch_metadata(hex_code):
         reg = ''
         model = ''
         operator = ''
+        callsign = ''
 
         if isinstance(data, dict):
             item = None
@@ -305,70 +280,36 @@ def fetch_metadata(hex_code):
                 return None
 
             if item:
-                reg = pick_first(item, ('reg', 'registration', 'tail', 'tail_number')) or ''
-                model = pick_first(item, ('type', 'typecode', 'model', 'aircraft_type')) or ''
+                reg = pick_first(item, ('r', 'reg', 'registration', 'tail', 'tail_number')) or ''
+                model = pick_first(item, ('t', 'type', 'typecode', 'model', 'aircraft_type')) or ''
                 operator = pick_first(item, ('ops', 'operator', 'owner', 'airline')) or ''
+                callsign = (pick_first(item, ('flight', 'callsign', 'flight_number')) or '').strip()
 
-            if not (reg or model or operator):
-                reg = pick_first(data, ('reg', 'registration')) or ''
-                model = pick_first(data, ('type', 'typecode', 'model')) or ''
+            if not (reg or model or operator or callsign):
+                reg = pick_first(data, ('r', 'reg', 'registration')) or ''
+                model = pick_first(data, ('t', 'type', 'typecode', 'model')) or ''
                 operator = pick_first(data, ('ops', 'operator', 'owner')) or ''
+                callsign = (pick_first(data, ('flight', 'callsign')) or '').strip()
 
-        else:
-            logger.debug(f"ADSB.lol returned non-JSON for {candidate}")
-
-        if reg or model or operator:
+        if reg or model or operator or callsign:
             metadata_cache[hex_code] = {
                 'registration': reg or '',
                 'model': model or '',
                 'operator': operator or '',
-                'timestamp': now
+                'callsign': callsign or '',
+                'timestamp': time.time()
             }
             if hex_code in metadata_failures:
                 del metadata_failures[hex_code]
-            return reg or '', model or '', operator or ''
+            return reg or '', model or '', operator or '', callsign or ''
     except requests.exceptions.Timeout:
         logger.warning(f"Metadata fetch timeout for {hex_code} from {candidate}")
-        backoff = min(backoff, 30)
-        host_error = True
     except requests.exceptions.RequestException as e:
         logger.warning(f"Metadata fetch failed for {hex_code} from {candidate}: {e}")
-        backoff = min(backoff, 60)
-        host_error = True
     except Exception as e:
         logger.debug(f"Unexpected parsing error for metadata from {candidate}: {e}")
-        backoff = min(backoff, 120)
-        host_error = True
 
-    # Update failure/backoff state
-    prev = metadata_failures.get(hex_code, {})
-    prev_backoff = prev.get('backoff', 0)
-    # exponential backoff: start with 'backoff', double previous up to a cap
-    if prev_backoff:
-        new_backoff = min(prev_backoff * 2, 3600)
-    else:
-        new_backoff = backoff
-    metadata_failures[hex_code] = {
-        'backoff': new_backoff,
-        'next_try': now + new_backoff,
-        'last_error_ts': now,
-    }
-
-    # If it looks like a host/network level failure, also set host-level backoff
-    if locals().get('host_error'):
-        prevh = metadata_host_failure.get('state', {})
-        prevh_backoff = prevh.get('backoff', 0)
-        if prevh_backoff:
-            newh = min(prevh_backoff * 2, 3600)
-        else:
-            newh = new_backoff
-        metadata_host_failure['state'] = {
-            'backoff': newh,
-            'next_try': now + newh,
-            'last_error_ts': now,
-        }
-
-    return '', '', ''
+    return '', '', '', ''
 
 def parse_message(message):
     try:
@@ -394,16 +335,29 @@ def log_aircraft(data):
     if now - last_logged_times[hex_code] < LOG_THROTTLE_SECONDS:
         return
 
+    # Fetch metadata first so changes in metadata trigger new log rows
+    reg, model, operator, meta_callsign = fetch_metadata(hex_code)
+
+    # Determine callsign: prefer parsed message, fallback to metadata
+    parsed_callsign = (data[1] or '').strip()
+    callsign = parsed_callsign if parsed_callsign else (meta_callsign or '')
+
+    altitude = data[2]
+    speed = data[3]
+    lat = data[4]
+    lon = data[5]
+
+    final_data = (callsign, altitude, speed, lat, lon, reg, model, operator)
+
     # Check if data has changed since last log
-    if last_logged_data.get(hex_code) == data[1:]:
+    if last_logged_data.get(hex_code) == final_data:
         return
 
     last_logged_times[hex_code] = now
-    last_logged_data[hex_code] = data[1:]
+    last_logged_data[hex_code] = final_data
 
     timestamp = datetime.utcnow().strftime('%Y-%m-%d %H:%M:%S')
-    reg, model, operator = fetch_metadata(hex_code)
-    row = [timestamp, hex_code, *data[1:], reg, model, operator]
+    row = [timestamp, hex_code, callsign, altitude, speed, lat, lon, reg, model, operator]
 
     try:
         log_handle = ensure_log_file()

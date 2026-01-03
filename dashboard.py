@@ -6,14 +6,12 @@ from collections import Counter
 from datetime import datetime, date
 import pytz
 import logging
-import shutil
 from logging.handlers import RotatingFileHandler
 
 app = Flask(__name__)
 
 # Logging setup
-# Allow overriding the logs directory via environment
-LOGGING_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
+LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
 os.makedirs(LOGGING_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGGING_DIR, 'dashboard.log')
 logger = logging.getLogger('dashboard')
@@ -30,7 +28,7 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
+LOG_DIR = "/home/ps/aircraft-logger/logs"
 LOCAL_TZ = pytz.timezone("Australia/Melbourne")
 
 def convert_to_local(utc_str):
@@ -92,81 +90,6 @@ def load_and_filter_csv(target_date_str):
     aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
     return aircraft_data, len(aircraft_data), len(unique_hexes), operator_counts.most_common(5), model_counts.most_common(5)
 
-
-def tail_file(path, lines=100):
-    """Return the last `lines` lines from a text file (handles missing files)."""
-    try:
-        if path.endswith('.gz'):
-            with gzip.open(path, 'rt', encoding='utf-8', errors='ignore') as f:
-                all_lines = f.read().splitlines()
-        else:
-            with open(path, 'r', encoding='utf-8', errors='ignore') as f:
-                all_lines = f.read().splitlines()
-        return all_lines[-lines:]
-    except Exception:
-        return []
-
-
-def get_recent_errors(log_path, lines=200):
-    entries = tail_file(log_path, lines)
-    errors = [l for l in entries if 'ERROR' in l or 'Traceback' in l or 'Exception' in l]
-    return errors[-50:]
-
-
-@app.route("/status")
-def status():
-    try:
-        today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
-        data, total, unique, top_operators, top_models = load_and_filter_csv(today_local)
-
-        # Last seen aircraft (most recent)
-        last_entry = data[0] if data else None
-
-        # Recent errors from logger files
-        aircraft_logger_path = os.path.join(LOGGING_DIR, 'aircraft_logger.log')
-        dashboard_log_path = os.path.join(LOGGING_DIR, 'dashboard.log')
-        errors_aircraft = get_recent_errors(aircraft_logger_path)
-        errors_dashboard = get_recent_errors(dashboard_log_path)
-
-        # Log files stats
-        files = []
-        try:
-            for fname in os.listdir(LOG_DIR):
-                if fname.startswith('aircraft_log_') and (fname.endswith('.csv') or fname.endswith('.csv.gz')):
-                    path = os.path.join(LOG_DIR, fname)
-                    try:
-                        size = os.path.getsize(path)
-                    except Exception:
-                        size = 0
-                    files.append({'name': fname, 'size': size})
-        except Exception as e:
-            logger.error(f"Failed to list log dir {LOG_DIR}: {e}")
-
-        # Disk usage for log directory
-        try:
-            du = shutil.disk_usage(LOG_DIR)
-            disk = {'total': du.total, 'used': du.used, 'free': du.free}
-        except Exception:
-            disk = None
-
-        status_info = {
-            'api': 'ok',
-            'total_records_today': total,
-            'unique_today': unique,
-            'last_entry': last_entry,
-            'top_operators': top_operators,
-            'top_models': top_models,
-            'files': files,
-            'disk': disk,
-            'errors_aircraft': errors_aircraft,
-            'errors_dashboard': errors_dashboard,
-        }
-
-        return render_template('status.html', status=status_info)
-    except Exception as e:
-        logger.error(f"Error building status page: {e}")
-        return "An error occurred while building status page.", 500
-
 @app.route("/")
 def index():
     try:
@@ -187,6 +110,32 @@ def index():
     except Exception as e:
         logger.error(f"Error in dashboard route: {e}")
         return "An error occurred while loading the dashboard.", 500
+
+
+@app.route('/status')
+def status():
+    """Return a compact JSON status with totals and the most recent record."""
+    try:
+        today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
+        data, total, unique, top_operators, top_models = load_and_filter_csv(today_local)
+        last_record = data[0] if data else {}
+        resp = {
+            'date': today_local,
+            'total_records': total,
+            'unique_aircraft': unique,
+            'last_record': {
+                'time_local': last_record.get('Time Local') if last_record else None,
+                'hex': last_record.get('Hex') if last_record else None,
+                'callsign': last_record.get('Callsign') if last_record else None,
+                'registration': last_record.get('Registration') if last_record else None,
+                'model': last_record.get('Model') if last_record else None,
+                'operator': last_record.get('Operator') if last_record else None,
+            }
+        }
+        return resp
+    except Exception as e:
+        logger.error(f"Error in status route: {e}")
+        return {"error": "failed to generate status"}, 500
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)
