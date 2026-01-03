@@ -16,7 +16,17 @@ from datetime import datetime
 
 
 DEFAULT_LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
-ADSB_TEMPLATE = os.environ.get('AIRLOGGER_METADATA_URLS', 'https://adsb.lol/aircraft/{hex}.json').split(',')[0]
+DEFAULT_TEMPLATE = 'https://adsb.lol/aircraft/{hex}.json'
+ADSB_TEMPLATE = os.environ.get('AIRLOGGER_METADATA_URLS', DEFAULT_TEMPLATE).split(',')[0]
+
+# Candidate templates to try when the primary returns 404 or is unavailable
+CANDIDATE_TEMPLATES = [
+    ADSB_TEMPLATE,
+    'https://adsb.lol/aircraft/{hex_lower}.json',
+    'https://adsb.lol/aircraft/{hex_upper}.json',
+    'https://adsb.lol/aircraft/{hex}',
+    'https://adsb.lol/api/aircraft/{hex}.json',
+]
 
 
 def read_hexes_for_date(log_dir, date_str):
@@ -47,13 +57,32 @@ def read_hexes_for_date(log_dir, date_str):
     return hexes
 
 
-def query_adsb(hex_code, template=ADSB_TEMPLATE, timeout=8):
-    url = template.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
-    try:
-        r = requests.get(url, timeout=timeout)
-        return r.status_code, r.text[:400], r.headers.get('content-type')
-    except Exception as e:
-        return None, str(e), None
+def query_adsb(hex_code, templates=None, timeout=8):
+    templates = templates or CANDIDATE_TEMPLATES
+    last_err = 'no attempt'
+    for tmpl in templates:
+        tmpl = tmpl.strip()
+        if not tmpl:
+            continue
+        url = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
+        try:
+            r = requests.get(url, timeout=timeout)
+            ctype = r.headers.get('content-type')
+            body = r.text
+            if r.status_code == 200 and ctype and 'application/json' in ctype:
+                try:
+                    return r.status_code, True, tmpl, r.json()
+                except Exception:
+                    return r.status_code, False, tmpl, body[:800]
+            if r.status_code == 200:
+                return r.status_code, False, tmpl, body[:800]
+            # return non-200 results too (e.g., 404)
+            last_err = f'HTTP {r.status_code} from {url}: ' + (body[:200])
+            continue
+        except Exception as e:
+            last_err = str(e)
+            continue
+    return None, False, None, last_err
 
 
 def main():
@@ -77,10 +106,17 @@ def main():
 
     print(f'Testing {min(len(hexes), args.limit)} hexes from {date_str} using template: {ADSB_TEMPLATE}')
     for i, h in enumerate(hexes[: args.limit], start=1):
-        status, body_snip, ctype = query_adsb(h)
+        status, is_json, tmpl, payload = query_adsb(h)
         print('-' * 60)
-        print(f'{i}. {h} -> HTTP {status} content-type: {ctype}')
-        print(body_snip)
+        if status is None:
+            print(f'{i}. {h} -> ERROR: {payload}')
+            continue
+        print(f'{i}. {h} -> HTTP {status} via template: {tmpl}')
+        if is_json:
+            import json
+            print(json.dumps(payload, indent=2)[:2000])
+        else:
+            print(str(payload)[:2000])
 
 
 if __name__ == '__main__':
