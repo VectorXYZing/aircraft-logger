@@ -19,7 +19,7 @@ load_dotenv()
 # Constants
 HOST = '127.0.0.1'
 PORT = 30003
-LOG_DIR = os.path.expanduser('~/aircraft-logger/logs')
+LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
 SOCKET_TIMEOUT = 30  # Socket timeout in seconds
@@ -33,7 +33,8 @@ THROTTLE_CLEANUP_INTERVAL = 3600  # Clean throttle dicts every hour
 MAX_THROTTLE_ENTRIES = 5000  # Maximum throttle entries
 
 # Logging setup
-LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
+# Allow overriding the logs directory via environment (useful for different service users)
+LOGGING_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
 os.makedirs(LOGGING_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGGING_DIR, 'aircraft_logger.log')
 logger = logging.getLogger('aircraft_logger')
@@ -52,6 +53,8 @@ logger.addHandler(console_handler)
 
 # Global state
 metadata_cache = {}
+# Track failures + backoff per hex to avoid hammering the metadata API when network is down
+metadata_failures = {}
 last_logged_times = defaultdict(lambda: 0)
 last_logged_data = {}
 running = True
@@ -234,12 +237,21 @@ def cleanup_cache():
     logger.info(f"Cache cleanup complete (new size: {len(metadata_cache)})")
 
 def fetch_metadata(hex_code):
+    # Return cached positive metadata if still fresh
+    now = time.time()
     cached = metadata_cache.get(hex_code)
-    if cached and time.time() - cached['timestamp'] < CACHE_TTL:
+    if cached and now - cached['timestamp'] < CACHE_TTL:
         return cached['registration'], cached['model'], cached['operator']
 
+    # If we previously recorded failures, check backoff
+    failure = metadata_failures.get(hex_code)
+    if failure and now < failure.get('next_try', 0):
+        # Respect negative cache/backoff - return empty results
+        logger.debug(f"Skipping metadata fetch for {hex_code}, next_try={failure.get('next_try')}")
+        return '', '', ''
+
+    url = f"https://opensky-network.org/api/metadata/aircraft/icao/{hex_code}"
     try:
-        url = f"https://opensky-network.org/api/metadata/aircraft/icao/{hex_code}"
         response = requests.get(url, timeout=5)
         if response.status_code == 200:
             data = response.json()
@@ -250,15 +262,39 @@ def fetch_metadata(hex_code):
                 'registration': reg,
                 'model': model,
                 'operator': operator,
-                'timestamp': time.time()
+                'timestamp': now
             }
+            # Clear any failure/backoff state on success
+            if hex_code in metadata_failures:
+                del metadata_failures[hex_code]
             return reg, model, operator
         else:
             logger.warning(f"Metadata fetch failed for {hex_code}: HTTP {response.status_code}")
+            # Treat non-200 as a failure and start backoff
+            backoff = 60
     except requests.exceptions.Timeout:
         logger.warning(f"Metadata fetch timeout for {hex_code}")
+        backoff = 30
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Metadata fetch failed for {hex_code}: {e}")
+        backoff = 60
     except Exception as e:
-        logger.error(f"Metadata fetch failed for {hex_code}: {e}")
+        logger.error(f"Unexpected error fetching metadata for {hex_code}: {e}")
+        backoff = 120
+
+    # Update failure/backoff state
+    prev = metadata_failures.get(hex_code, {})
+    prev_backoff = prev.get('backoff', 0)
+    # exponential backoff: start with 'backoff', double previous up to a cap
+    if prev_backoff:
+        new_backoff = min(prev_backoff * 2, 3600)
+    else:
+        new_backoff = backoff
+    metadata_failures[hex_code] = {
+        'backoff': new_backoff,
+        'next_try': now + new_backoff,
+        'last_error_ts': now,
+    }
 
     return '', '', ''
 

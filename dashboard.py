@@ -12,7 +12,8 @@ from logging.handlers import RotatingFileHandler
 app = Flask(__name__)
 
 # Logging setup
-LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
+# Allow overriding the logs directory via environment
+LOGGING_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
 os.makedirs(LOGGING_DIR, exist_ok=True)
 LOG_FILE = os.path.join(LOGGING_DIR, 'dashboard.log')
 logger = logging.getLogger('dashboard')
@@ -29,7 +30,7 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-LOG_DIR = os.path.expanduser('~/aircraft-logger/logs')
+LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
 LOCAL_TZ = pytz.timezone("Australia/Melbourne")
 
 def convert_to_local(utc_str):
