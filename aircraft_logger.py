@@ -26,7 +26,7 @@ LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-log
 # To use ADSB.lol, set AIRLOGGER_METADATA_URLS in the environment to an ADSB.lol template.
 METADATA_URL_TEMPLATES = os.environ.get(
     'AIRLOGGER_METADATA_URLS',
-    'https://opensky-network.org/api/metadata/aircraft/icao/{hex}'
+    'https://adsb.lol/aircraft/{hex}.json'
 ).split(',')
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
