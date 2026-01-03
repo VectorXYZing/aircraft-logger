@@ -26,7 +26,7 @@ LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-log
 # To use ADSB.lol, set AIRLOGGER_METADATA_URLS in the environment to an ADSB.lol template.
 METADATA_URL_TEMPLATES = os.environ.get(
     'AIRLOGGER_METADATA_URLS',
-    'https://adsb.lol/aircraft/{hex}.json'
+    'https://api.adsb.lol/v2/icao/{hex}'
 ).split(',')
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
@@ -299,19 +299,30 @@ def fetch_metadata(hex_code):
             operator = ''
 
             if isinstance(data, dict):
-                # Common keys mapping
-                for k in ('registration', 'reg', 'tail', 'tail_number'):
-                    if k in data and data.get(k):
-                        reg = data.get(k)
-                        break
-                for k in ('typecode', 'model', 'aircraft_type'):
-                    if k in data and data.get(k):
-                        model = data.get(k)
-                        break
-                for k in ('operator', 'owner', 'airline'):
-                    if k in data and data.get(k):
-                        operator = data.get(k)
-                        break
+                # ADSB.lol v2 returns {'ac': [ ... ]} where each item contains fields.
+                item = None
+                if 'ac' in data and isinstance(data['ac'], list) and data['ac']:
+                    item = data['ac'][0]
+
+                def pick_first(src, keys):
+                    if not src or not isinstance(src, dict):
+                        return None
+                    for k in keys:
+                        if k in src and src.get(k):
+                            return src.get(k)
+                    return None
+
+                # Try to extract from item (v2) first
+                if item:
+                    reg = pick_first(item, ('registration', 'reg', 'tail', 'tail_number', 'reg_code')) or ''
+                    model = pick_first(item, ('typecode', 'model', 'aircraft_type', 'type', 'mfr')) or ''
+                    operator = pick_first(item, ('operator', 'owner', 'airline', 'ops')) or ''
+
+                # Fallback to top-level keys if item didn't contain them
+                if not (reg or model or operator):
+                    reg = pick_first(data, ('registration', 'reg', 'tail', 'tail_number')) or ''
+                    model = pick_first(data, ('typecode', 'model', 'aircraft_type')) or ''
+                    operator = pick_first(data, ('operator', 'owner', 'airline')) or ''
             else:
                 # If not JSON, skip this source
                 logger.debug(f"Metadata source {candidate} returned non-JSON response")
