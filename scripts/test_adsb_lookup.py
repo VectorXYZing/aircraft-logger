@@ -16,23 +16,18 @@ from datetime import datetime
 
 
 DEFAULT_LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
-DEFAULT_TEMPLATE = 'https://adsb.lol/aircraft/{hex}.json'
-ADSB_TEMPLATE = os.environ.get('AIRLOGGER_METADATA_URLS', DEFAULT_TEMPLATE).split(',')[0]
+DEFAULT_TEMPLATE = 'https://api.adsb.lol/v2/icao/{hex}'
+# Allow override via env var (keeps backward-compat name if set)
+ADSB_TEMPLATE = os.environ.get('AIRLOGGER_METADATA_URL', os.environ.get('AIRLOGGER_METADATA_URLS', DEFAULT_TEMPLATE)).split(',')[0]
 
 # Candidate templates to try when the primary returns 404 or is unavailable
 CANDIDATE_TEMPLATES = [
     ADSB_TEMPLATE,
+    'https://api.adsb.lol/v2/icao/{hex_lower}',
+    'https://api.adsb.lol/v2/icao/{hex_upper}',
+    'https://adsb.lol/aircraft/{hex}.json',
     'https://adsb.lol/aircraft/{hex_lower}.json',
     'https://adsb.lol/aircraft/{hex_upper}.json',
-    'https://adsb.lol/aircraft/{hex}',
-    'https://adsb.lol/api/aircraft/{hex}.json',
-    'https://adsb.lol/aircraft/icao/{hex}.json',
-    'https://adsb.lol/aircraft/icao/{hex_lower}.json',
-    'https://adsb.lol/aircraft/icao/{hex_upper}.json',
-    'https://adsb.lol/data/aircraft/{hex}.json',
-    'https://www.adsb.lol/aircraft/{hex}.json',
-    'https://www.adsb.lol/aircraft/{hex_lower}.json',
-    'https://api.adsb.lol/aircraft/{hex}.json',
 ]
 
 
