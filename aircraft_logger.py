@@ -20,6 +20,14 @@ load_dotenv()
 HOST = '127.0.0.1'
 PORT = 30003
 LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-logger/logs'))
+# Comma-separated list of metadata URL templates. Use '{hex}' where the ICAO hex should be substituted.
+# Example to use OpenSky (default):
+#   https://opensky-network.org/api/metadata/aircraft/icao/{hex}
+# To use ADSB.lol, set AIRLOGGER_METADATA_URLS in the environment to an ADSB.lol template.
+METADATA_URL_TEMPLATES = os.environ.get(
+    'AIRLOGGER_METADATA_URLS',
+    'https://opensky-network.org/api/metadata/aircraft/icao/{hex}'
+).split(',')
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
 SOCKET_TIMEOUT = 30  # Socket timeout in seconds
@@ -55,6 +63,8 @@ logger.addHandler(console_handler)
 metadata_cache = {}
 # Track failures + backoff per hex to avoid hammering the metadata API when network is down
 metadata_failures = {}
+# Host-level backoff to avoid repeating network failures for every hex
+metadata_host_failure = {}
 last_logged_times = defaultdict(lambda: 0)
 last_logged_data = {}
 running = True
@@ -237,50 +247,102 @@ def cleanup_cache():
     logger.info(f"Cache cleanup complete (new size: {len(metadata_cache)})")
 
 def fetch_metadata(hex_code):
+    # Allow disabling metadata lookups via env for quick mitigation
+    if os.environ.get('AIRLOGGER_DISABLE_METADATA', '').lower() in ('1', 'true', 'yes'):
+        return '', '', ''
+
     # Return cached positive metadata if still fresh
     now = time.time()
     cached = metadata_cache.get(hex_code)
     if cached and now - cached['timestamp'] < CACHE_TTL:
         return cached['registration'], cached['model'], cached['operator']
 
-    # If we previously recorded failures, check backoff
+    # If host-level failure recorded, respect its backoff first
+    host_fail = metadata_host_failure.get('state')
+    if host_fail and now < host_fail.get('next_try', 0):
+        logger.info("Skipping metadata fetch due to host-level backoff")
+        return '', '', ''
+
+    # If we previously recorded failures for this hex, check per-hex backoff
     failure = metadata_failures.get(hex_code)
     if failure and now < failure.get('next_try', 0):
         # Respect negative cache/backoff - return empty results
         logger.debug(f"Skipping metadata fetch for {hex_code}, next_try={failure.get('next_try')}")
         return '', '', ''
 
-    url = f"https://opensky-network.org/api/metadata/aircraft/icao/{hex_code}"
-    try:
-        response = requests.get(url, timeout=5)
-        if response.status_code == 200:
-            data = response.json()
-            reg = data.get('registration', '')
-            model = data.get('typecode', '')
-            operator = data.get('operator', '')
-            metadata_cache[hex_code] = {
-                'registration': reg,
-                'model': model,
-                'operator': operator,
-                'timestamp': now
-            }
-            # Clear any failure/backoff state on success
-            if hex_code in metadata_failures:
-                del metadata_failures[hex_code]
-            return reg, model, operator
-        else:
-            logger.warning(f"Metadata fetch failed for {hex_code}: HTTP {response.status_code}")
-            # Treat non-200 as a failure and start backoff
-            backoff = 60
-    except requests.exceptions.Timeout:
-        logger.warning(f"Metadata fetch timeout for {hex_code}")
-        backoff = 30
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Metadata fetch failed for {hex_code}: {e}")
-        backoff = 60
-    except Exception as e:
-        logger.error(f"Unexpected error fetching metadata for {hex_code}: {e}")
-        backoff = 120
+    # Try configured metadata URL templates in order
+    backoff = 60
+    host_error = False
+    for tmpl in METADATA_URL_TEMPLATES:
+        tmpl = tmpl.strip()
+        if not tmpl:
+            continue
+        try:
+            candidate = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
+        except Exception:
+            candidate = tmpl.replace('{hex}', hex_code).replace('{hex_lower}', hex_code.lower()).replace('{hex_upper}', hex_code.upper())
+
+        try:
+            response = requests.get(candidate, timeout=5)
+            if response.status_code != 200:
+                logger.debug(f"Metadata source {candidate} returned HTTP {response.status_code}")
+                continue
+
+            # Try parse JSON
+            try:
+                data = response.json()
+            except Exception:
+                data = None
+
+            reg = ''
+            model = ''
+            operator = ''
+
+            if isinstance(data, dict):
+                # Common keys mapping
+                for k in ('registration', 'reg', 'tail', 'tail_number'):
+                    if k in data and data.get(k):
+                        reg = data.get(k)
+                        break
+                for k in ('typecode', 'model', 'aircraft_type'):
+                    if k in data and data.get(k):
+                        model = data.get(k)
+                        break
+                for k in ('operator', 'owner', 'airline'):
+                    if k in data and data.get(k):
+                        operator = data.get(k)
+                        break
+            else:
+                # If not JSON, skip this source
+                logger.debug(f"Metadata source {candidate} returned non-JSON response")
+                continue
+
+            # If we found some metadata, cache and return
+            if reg or model or operator:
+                metadata_cache[hex_code] = {
+                    'registration': reg or '',
+                    'model': model or '',
+                    'operator': operator or '',
+                    'timestamp': now
+                }
+                if hex_code in metadata_failures:
+                    del metadata_failures[hex_code]
+                return reg or '', model or '', operator or ''
+
+        except requests.exceptions.Timeout:
+            logger.warning(f"Metadata fetch timeout for {hex_code} from {candidate}")
+            backoff = min(backoff, 30)
+            host_error = True
+        except requests.exceptions.RequestException as e:
+            logger.warning(f"Metadata fetch failed for {hex_code} from {candidate}: {e}")
+            backoff = min(backoff, 60)
+            host_error = True
+        except Exception as e:
+            logger.debug(f"Unexpected parsing error for metadata from {candidate}: {e}")
+            backoff = min(backoff, 120)
+            host_error = True
+
+    # No source succeeded
 
     # Update failure/backoff state
     prev = metadata_failures.get(hex_code, {})
@@ -295,6 +357,20 @@ def fetch_metadata(hex_code):
         'next_try': now + new_backoff,
         'last_error_ts': now,
     }
+
+    # If it looks like a host/network level failure, also set host-level backoff
+    if locals().get('host_error'):
+        prevh = metadata_host_failure.get('state', {})
+        prevh_backoff = prevh.get('backoff', 0)
+        if prevh_backoff:
+            newh = min(prevh_backoff * 2, 3600)
+        else:
+            newh = new_backoff
+        metadata_host_failure['state'] = {
+            'backoff': newh,
+            'next_try': now + newh,
+            'last_error_ts': now,
+        }
 
     return '', '', ''
 
