@@ -26,6 +26,13 @@ CANDIDATE_TEMPLATES = [
     'https://adsb.lol/aircraft/{hex_upper}.json',
     'https://adsb.lol/aircraft/{hex}',
     'https://adsb.lol/api/aircraft/{hex}.json',
+    'https://adsb.lol/aircraft/icao/{hex}.json',
+    'https://adsb.lol/aircraft/icao/{hex_lower}.json',
+    'https://adsb.lol/aircraft/icao/{hex_upper}.json',
+    'https://adsb.lol/data/aircraft/{hex}.json',
+    'https://www.adsb.lol/aircraft/{hex}.json',
+    'https://www.adsb.lol/aircraft/{hex_lower}.json',
+    'https://api.adsb.lol/aircraft/{hex}.json',
 ]
 
 
@@ -65,21 +72,24 @@ def query_adsb(hex_code, templates=None, timeout=8):
         if not tmpl:
             continue
         url = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
+        print(f' Trying {url} ...')
         try:
             r = requests.get(url, timeout=timeout)
             ctype = r.headers.get('content-type')
             body = r.text
+            print(f'  -> HTTP {r.status_code} content-type: {ctype}')
             if r.status_code == 200 and ctype and 'application/json' in ctype:
                 try:
-                    return r.status_code, True, tmpl, r.json()
+                    return r.status_code, True, url, r.json()
                 except Exception:
-                    return r.status_code, False, tmpl, body[:800]
+                    return r.status_code, False, url, body[:800]
             if r.status_code == 200:
-                return r.status_code, False, tmpl, body[:800]
-            # return non-200 results too (e.g., 404)
+                return r.status_code, False, url, body[:800]
+            # record non-200 and continue
             last_err = f'HTTP {r.status_code} from {url}: ' + (body[:200])
             continue
         except Exception as e:
+            print(f'  -> error: {e}')
             last_err = str(e)
             continue
     return None, False, None, last_err

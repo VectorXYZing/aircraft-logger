@@ -24,10 +24,7 @@ LOG_DIR = os.environ.get('AIRLOGGER_LOG_DIR', os.path.expanduser('~/aircraft-log
 # Example to use OpenSky (default):
 #   https://opensky-network.org/api/metadata/aircraft/icao/{hex}
 # To use ADSB.lol, set AIRLOGGER_METADATA_URLS in the environment to an ADSB.lol template.
-METADATA_URL_TEMPLATES = os.environ.get(
-    'AIRLOGGER_METADATA_URLS',
-    'https://api.adsb.lol/v2/icao/{hex}'
-).split(',')
+METADATA_URL_TEMPLATE = os.environ.get('AIRLOGGER_METADATA_URL', 'https://api.adsb.lol/v2/icao/{hex}')
 CACHE_TTL = 86400  # 1 day
 LOG_THROTTLE_SECONDS = 60  # Limit to 1 log per aircraft per minute
 SOCKET_TIMEOUT = 30  # Socket timeout in seconds
@@ -270,90 +267,78 @@ def fetch_metadata(hex_code):
         logger.debug(f"Skipping metadata fetch for {hex_code}, next_try={failure.get('next_try')}")
         return '', '', ''
 
-    # Try configured metadata URL templates in order
+    # Use the single configured ADSB.lol v2 endpoint
     backoff = 60
     host_error = False
-    for tmpl in METADATA_URL_TEMPLATES:
-        tmpl = tmpl.strip()
-        if not tmpl:
-            continue
+    tmpl = METADATA_URL_TEMPLATE
+    try:
         try:
             candidate = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
         except Exception:
             candidate = tmpl.replace('{hex}', hex_code).replace('{hex_lower}', hex_code.lower()).replace('{hex_upper}', hex_code.upper())
 
-        try:
-            response = requests.get(candidate, timeout=5)
-            if response.status_code != 200:
-                logger.debug(f"Metadata source {candidate} returned HTTP {response.status_code}")
-                continue
-
-            # Try parse JSON
+        response = requests.get(candidate, timeout=5)
+        if response.status_code != 200:
+            logger.debug(f"ADSB.lol returned HTTP {response.status_code} for {candidate}")
+            data = None
+        else:
             try:
                 data = response.json()
             except Exception:
                 data = None
 
-            reg = ''
-            model = ''
-            operator = ''
+        reg = ''
+        model = ''
+        operator = ''
 
-            if isinstance(data, dict):
-                # ADSB.lol v2 returns {'ac': [ ... ]} where each item contains fields.
-                item = None
-                if 'ac' in data and isinstance(data['ac'], list) and data['ac']:
-                    item = data['ac'][0]
+        if isinstance(data, dict):
+            item = None
+            if 'ac' in data and isinstance(data['ac'], list) and data['ac']:
+                item = data['ac'][0]
 
-                def pick_first(src, keys):
-                    if not src or not isinstance(src, dict):
-                        return None
-                    for k in keys:
-                        if k in src and src.get(k):
-                            return src.get(k)
+            def pick_first(src, keys):
+                if not src or not isinstance(src, dict):
                     return None
+                for k in keys:
+                    if k in src and src.get(k):
+                        return src.get(k)
+                return None
 
-                # Try to extract from item (v2) first
-                if item:
-                    reg = pick_first(item, ('registration', 'reg', 'tail', 'tail_number', 'reg_code')) or ''
-                    model = pick_first(item, ('typecode', 'model', 'aircraft_type', 'type', 'mfr')) or ''
-                    operator = pick_first(item, ('operator', 'owner', 'airline', 'ops')) or ''
+            if item:
+                reg = pick_first(item, ('reg', 'registration', 'tail', 'tail_number')) or ''
+                model = pick_first(item, ('type', 'typecode', 'model', 'aircraft_type')) or ''
+                operator = pick_first(item, ('ops', 'operator', 'owner', 'airline')) or ''
 
-                # Fallback to top-level keys if item didn't contain them
-                if not (reg or model or operator):
-                    reg = pick_first(data, ('registration', 'reg', 'tail', 'tail_number')) or ''
-                    model = pick_first(data, ('typecode', 'model', 'aircraft_type')) or ''
-                    operator = pick_first(data, ('operator', 'owner', 'airline')) or ''
-            else:
-                # If not JSON, skip this source
-                logger.debug(f"Metadata source {candidate} returned non-JSON response")
-                continue
+            if not (reg or model or operator):
+                reg = pick_first(data, ('reg', 'registration')) or ''
+                model = pick_first(data, ('type', 'typecode', 'model')) or ''
+                operator = pick_first(data, ('ops', 'operator', 'owner')) or ''
 
-            # If we found some metadata, cache and return
-            if reg or model or operator:
-                metadata_cache[hex_code] = {
-                    'registration': reg or '',
-                    'model': model or '',
-                    'operator': operator or '',
-                    'timestamp': now
-                }
-                if hex_code in metadata_failures:
-                    del metadata_failures[hex_code]
-                return reg or '', model or '', operator or ''
+        else:
+            logger.debug(f"ADSB.lol returned non-JSON for {candidate}")
 
-        except requests.exceptions.Timeout:
-            logger.warning(f"Metadata fetch timeout for {hex_code} from {candidate}")
-            backoff = min(backoff, 30)
-            host_error = True
-        except requests.exceptions.RequestException as e:
-            logger.warning(f"Metadata fetch failed for {hex_code} from {candidate}: {e}")
-            backoff = min(backoff, 60)
-            host_error = True
-        except Exception as e:
-            logger.debug(f"Unexpected parsing error for metadata from {candidate}: {e}")
-            backoff = min(backoff, 120)
-            host_error = True
-
-    # No source succeeded
+        if reg or model or operator:
+            metadata_cache[hex_code] = {
+                'registration': reg or '',
+                'model': model or '',
+                'operator': operator or '',
+                'timestamp': now
+            }
+            if hex_code in metadata_failures:
+                del metadata_failures[hex_code]
+            return reg or '', model or '', operator or ''
+    except requests.exceptions.Timeout:
+        logger.warning(f"Metadata fetch timeout for {hex_code} from {candidate}")
+        backoff = min(backoff, 30)
+        host_error = True
+    except requests.exceptions.RequestException as e:
+        logger.warning(f"Metadata fetch failed for {hex_code} from {candidate}: {e}")
+        backoff = min(backoff, 60)
+        host_error = True
+    except Exception as e:
+        logger.debug(f"Unexpected parsing error for metadata from {candidate}: {e}")
+        backoff = min(backoff, 120)
+        host_error = True
 
     # Update failure/backoff state
     prev = metadata_failures.get(hex_code, {})
