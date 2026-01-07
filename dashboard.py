@@ -11,7 +11,7 @@ import time
 from airlogger.metadata import fetch_metadata
 
 app = Flask(__name__)
-VERSION = "1.1.2"
+VERSION = "1.1.3"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -134,8 +134,30 @@ def load_and_filter_csv(target_date_str):
         logger.error(f"Error loading CSV files: {e}")
         return [], 0, 0, [], []
 
-    # Second pass: Fetch missing metadata from API if still missing, and collect stats
+    # Second pass: Optimize metadata fetching (once per unique hex)
     unique_hexes = set()
+    for row in aircraft_data:
+        hex_code = (row.get("Hex") or "").strip().upper()
+        if hex_code:
+            unique_hexes.add(hex_code)
+
+    # For each unique hex, if we don't have metadata from the logs, try the API
+    for hex_code in unique_hexes:
+        if hex_code not in hex_metadata:
+            hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
+        
+        meta = hex_metadata[hex_code]
+        if not meta.get("Operator") or not meta.get("Model"):
+            reg, model, operator, _ = fetch_metadata(hex_code)
+            if operator and not meta.get("Operator"): meta["Operator"] = operator
+            if model and not meta.get("Model"): meta["Model"] = model
+            if reg and not meta.get("Registration"): meta["Registration"] = reg
+            
+            # Ensure we don't keep trying this hex if it failed
+            if not meta.get("Operator"): meta["Operator"] = ""
+            if not meta.get("Model"): meta["Model"] = ""
+
+    # Third pass: Backfill metadata and collect stats
     operator_counts = Counter()
     model_counts = Counter()
     # To avoid double counting same aircraft in charts
@@ -146,22 +168,8 @@ def load_and_filter_csv(target_date_str):
         if not hex_code:
             continue
             
-        unique_hexes.add(hex_code)
+        meta = hex_metadata.get(hex_code, {})
         
-        # Ensure we have a dict entry for this hex
-        if hex_code not in hex_metadata:
-            hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
-            
-        meta = hex_metadata[hex_code]
-        
-        # If still missing metadata after scanning logs, try fetching it
-        if not meta.get("Operator") or not meta.get("Model"):
-            # This call is cached in airlogger.metadata
-            reg, model, operator, _ = fetch_metadata(hex_code)
-            if operator and not meta.get("Operator"): meta["Operator"] = operator
-            if model and not meta.get("Model"): meta["Model"] = model
-            if reg and not meta.get("Registration"): meta["Registration"] = reg
-
         # Apply metadata to row
         for field in ["Registration", "Model", "Operator"]:
             current_val = (row.get(field) or "").strip()
