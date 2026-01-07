@@ -10,7 +10,7 @@ from logging.handlers import RotatingFileHandler
 import time
 
 app = Flask(__name__)
-VERSION = "1.1.4"
+VERSION = "1.1.5"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -97,9 +97,9 @@ def load_and_filter_csv(target_date_str):
                 continue
             try:
                 if filepath.endswith('.gz'):
-                    file_handle = gzip.open(filepath, 'rt', encoding='utf-8')
+                    file_handle = gzip.open(filepath, 'rt', encoding='utf-8', errors='ignore')
                 else:
-                    file_handle = open(filepath, 'r', newline='', encoding='utf-8')
+                    file_handle = open(filepath, 'r', newline='', encoding='utf-8', errors='ignore')
 
                 with file_handle:
                     reader = csv.DictReader(file_handle)
@@ -174,7 +174,13 @@ def load_and_filter_csv(target_date_str):
 def index():
     try:
         date_str = request.args.get("date")
-        today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
+        # Ensure we have a valid base date for today
+        try:
+            now = datetime.now(LOCAL_TZ)
+        except Exception:
+            now = datetime.now()
+            
+        today_local = now.strftime("%Y-%m-%d")
         selected_date = date_str if date_str else today_local
 
         data, total, unique, top_operators, top_models = load_and_filter_csv(selected_date)
@@ -212,8 +218,8 @@ def index():
 
         return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local, health_status=health_status, version=VERSION)
     except Exception as e:
-        logger.error(f"Error in dashboard route: {e}")
-        return "An error occurred while loading the dashboard.", 500
+        logger.error(f"CRITICAL Error in dashboard route: {e}", exc_info=True)
+        return f"<h1>Dashboard Error</h1><p>{str(e)}</p><p>Check dashboard.log for details.</p>", 500
 
 
 @app.route('/status')
