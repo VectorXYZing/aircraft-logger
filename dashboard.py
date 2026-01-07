@@ -7,6 +7,7 @@ from datetime import datetime, date
 import pytz
 import logging
 from logging.handlers import RotatingFileHandler
+import time
 
 app = Flask(__name__)
 
@@ -28,14 +29,48 @@ console_handler = logging.StreamHandler()
 console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
-LOG_DIR = "/home/ps/aircraft-logger/logs"
-LOCAL_TZ = pytz.timezone("Australia/Melbourne")
+from airlogger.config import LOG_DIR as LOG_DIR_CONFIG, TIMEZONE as TIMEZONE_CONFIG
+
+# Use configurable log dir (default: ~/aircraft-logger/logs)
+LOG_DIR = os.path.expanduser(LOG_DIR_CONFIG)
+
+# Timezone handling: prefer configured timezone, fall back to system local zone
+try:
+    from zoneinfo import ZoneInfo
+    HAS_ZONEINFO = True
+except Exception:
+    ZoneInfo = None
+    HAS_ZONEINFO = False
+
+if TIMEZONE_CONFIG:
+    try:
+        if HAS_ZONEINFO:
+            LOCAL_TZ = ZoneInfo(TIMEZONE_CONFIG)
+        else:
+            LOCAL_TZ = pytz.timezone(TIMEZONE_CONFIG)
+    except Exception:
+        LOCAL_TZ = None
+else:
+    # No explicit timezone configured; use system local timezone
+    try:
+        LOCAL_TZ = datetime.now().astimezone().tzinfo
+    except Exception:
+        LOCAL_TZ = None
+
 
 def convert_to_local(utc_str):
+    """Convert a UTC timestamp string to local timezone-aware datetime.
+
+    Returns None on parse/convert errors.
+    """
     try:
-        utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=pytz.utc)
-        return utc_time.astimezone(LOCAL_TZ)
-    except:
+        utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S").replace(tzinfo=ZoneInfo("UTC") if HAS_ZONEINFO else pytz.utc)
+        if LOCAL_TZ:
+            return utc_time.astimezone(LOCAL_TZ)
+        return utc_time
+    except ValueError:
+        return None
+    except Exception:
         return None
 
 def load_and_filter_csv(target_date_str):
@@ -50,31 +85,33 @@ def load_and_filter_csv(target_date_str):
         logger.error(f"Invalid date format: {target_date_str} - {e}")
         return [], 0, 0, [], []
 
+    # Only load files for the target date (faster than scanning everything)
+    candidates = [
+        os.path.join(LOG_DIR, f"aircraft_log_{target_date}.csv"),
+        os.path.join(LOG_DIR, f"aircraft_log_{target_date}.csv.gz"),
+    ]
+
     try:
-        for filename in os.listdir(LOG_DIR):
-            # Check for both .csv and .csv.gz files
-            if not (filename.endswith(".csv") or filename.endswith(".csv.gz")):
+        for filepath in candidates:
+            if not os.path.exists(filepath):
                 continue
-            
-            filepath = os.path.join(LOG_DIR, filename)
             try:
-                # Open file (compressed or uncompressed)
-                if filename.endswith(".gz"):
+                if filepath.endswith('.gz'):
                     file_handle = gzip.open(filepath, 'rt', encoding='utf-8')
                 else:
                     file_handle = open(filepath, 'r', newline='', encoding='utf-8')
-                
+
                 with file_handle:
                     reader = csv.DictReader(file_handle)
                     for row in reader:
-                        local_time = convert_to_local(row["Time UTC"])
+                        local_time = convert_to_local(row.get("Time UTC", ""))
                         if not local_time:
                             continue
                         if local_time.date() != target_date:
                             continue
                         row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
                         aircraft_data.append(row)
-                        unique_hexes.add(row["Hex"])
+                        unique_hexes.add(row.get("Hex", ""))
                         operator = row.get("Operator", "")
                         if operator:
                             operator_counts[operator] += 1
@@ -132,10 +169,72 @@ def status():
                 'operator': last_record.get('Operator') if last_record else None,
             }
         }
-        return resp
+
+        # Attach heartbeat / health information
+        try:
+            import json
+            from airlogger.config import HEARTBEAT_FILE, HEALTH_THRESHOLD
+
+            hb = None
+            if os.path.exists(HEARTBEAT_FILE):
+                try:
+                    with open(HEARTBEAT_FILE, 'r', encoding='utf-8') as hf:
+                        hb = json.load(hf)
+                except Exception:
+                    hb = None
+
+            if hb and isinstance(hb, dict) and 'timestamp' in hb:
+                age = time.time() - hb['timestamp']
+                healthy = age <= HEALTH_THRESHOLD
+                resp['heartbeat'] = {
+                    'last_seen_iso': hb.get('iso'),
+                    'age_seconds': int(age),
+                    'healthy': healthy,
+                    'pid': hb.get('pid'),
+                    'cache_size': hb.get('cache_size')
+                }
+            else:
+                resp['heartbeat'] = {'last_seen_iso': None, 'age_seconds': None, 'healthy': False}
+        except Exception:
+            resp['heartbeat'] = {'last_seen_iso': None, 'age_seconds': None, 'healthy': False}
+
+        # Use Flask json response helper
+        from flask import jsonify
+        return jsonify(resp)
     except Exception as e:
         logger.error(f"Error in status route: {e}")
         return {"error": "failed to generate status"}, 500
+
+
+@app.route('/health')
+def health():
+    """Simple health endpoint that returns 200 if the logger heartbeat is recent, else 503."""
+    try:
+        from airlogger.config import HEARTBEAT_FILE, HEALTH_THRESHOLD
+        import json
+        hb = None
+        if os.path.exists(HEARTBEAT_FILE):
+            try:
+                with open(HEARTBEAT_FILE, 'r', encoding='utf-8') as hf:
+                    hb = json.load(hf)
+            except Exception:
+                hb = None
+
+        healthy = False
+        age = None
+        if hb and isinstance(hb, dict) and 'timestamp' in hb:
+            age = time.time() - hb['timestamp']
+            healthy = age <= HEALTH_THRESHOLD
+
+        from flask import jsonify
+        if healthy:
+            return jsonify({'healthy': True, 'age_seconds': int(age)}), 200
+        else:
+            return jsonify({'healthy': False, 'age_seconds': int(age) if age is not None else None}), 503
+    except Exception as e:
+        logger.error(f"Error in health route: {e}")
+        return {"healthy": False}, 500
+
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=5000)

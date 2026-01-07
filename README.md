@@ -51,6 +51,9 @@ A lightweight aircraft logger and dashboard for Raspberry Pi that:
 │   ├── style.css            # Dashboard CSS styling
 │   └── script.js            # Dashboard interactivity
 ├── logs/                    # Daily aircraft logs stored here
+├── scripts/                 # Helper scripts for lookups and debugging
+│   ├── inspect_opensky.py   # Inspect OpenSky metadata for a hex (replaces inspect_adsb_lol.py)
+│   └── test_opensky_lookup.py # Batch CLI tester for OpenSky lookups
 ├── .env                     # Local config (ignored by git)
 ├── .gitignore
 ├── requirements.txt
@@ -157,6 +160,27 @@ sudo systemctl status piaware
 
 ### Q: I don't see metadata like aircraft model/operator?
 A: This feature uses the OpenSky API. Sometimes OpenSky may not have info for every hex code, especially for military/private planes.
+
+### Migration note
+If you had previously used ADSB.lol helper scripts, they were removed. Use the new OpenSky scripts instead:
+
+- `scripts/inspect_opensky.py --hex AB1234` (replaces `inspect_adsb_lol.py`)
+- `scripts/test_opensky_lookup.py --hex AB1234` (replaces `test_adsb_lookup.py`)
+
+If you need to update scripts that referenced the old filenames, here's an example `sed` you can run in your dotfiles or scripts directory:
+
+```bash
+# replace references to the old script
+grep -R --line-number "inspect_adsb_lol.py" . | cut -d: -f1 | xargs -I{} sed -i '' "s/inspect_adsb_lol.py/inspect_opensky.py/g" {}
+```
+
+Health check
+
+The logger writes a heartbeat file to the logs directory (default: `~/aircraft-logger/logs/heartbeat.json`) every few minutes. The dashboard exposes:
+
+- `/status` — includes `heartbeat` info (last seen, age_seconds and `healthy` boolean).
+- `/health` — returns HTTP 200 when healthy and 503 when the logger heartbeat is stale. The threshold is configurable via `AIRLOGGER_HEALTH_THRESHOLD` (default 600s).
+
 
 ### Q: The time seems off — what's going on?
 A: The dashboard uses your **local timezone** (e.g., AEST), but logs are saved in UTC. The dashboard correctly merges and presents logs by local date.

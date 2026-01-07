@@ -51,8 +51,8 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 # Global state
-metadata_cache = {}
-metadata_failures = {}
+import airlogger.metadata as metadata
+
 last_logged_times = defaultdict(lambda: 0)
 last_logged_data = {}
 running = True
@@ -214,102 +214,30 @@ def cleanup_cache():
     if current_time - last_cache_cleanup < CACHE_CLEANUP_INTERVAL:
         return
     
-    logger.info(f"Cleaning cache (current size: {len(metadata_cache)})")
+logger.info(f"Cleaning cache (current size: {len(metadata.metadata_cache)})")
     expired_keys = []
-    for key, value in metadata_cache.items():
+    for key, value in list(metadata.metadata_cache.items()):
         if current_time - value['timestamp'] > CACHE_TTL:
             expired_keys.append(key)
-    
+
     for key in expired_keys:
-        del metadata_cache[key]
-    
+        del metadata.metadata_cache[key]
+
     # If cache is still too large, remove oldest entries
-    if len(metadata_cache) > MAX_CACHE_SIZE:
-        sorted_cache = sorted(metadata_cache.items(), key=lambda x: x[1]['timestamp'])
-        entries_to_remove = len(metadata_cache) - MAX_CACHE_SIZE
+    if len(metadata.metadata_cache) > MAX_CACHE_SIZE:
+        sorted_cache = sorted(metadata.metadata_cache.items(), key=lambda x: x[1]['timestamp'])
+        entries_to_remove = len(metadata.metadata_cache) - MAX_CACHE_SIZE
         for key, _ in sorted_cache[:entries_to_remove]:
-            del metadata_cache[key]
+            del metadata.metadata_cache[key]
         logger.warning(f"Cache exceeded max size, removed {entries_to_remove} oldest entries")
-    
+
     last_cache_cleanup = current_time
-    logger.info(f"Cache cleanup complete (new size: {len(metadata_cache)})")
+    logger.info(f"Cache cleanup complete (new size: {len(metadata.metadata_cache)})")
 
-def fetch_metadata(hex_code):
-    """Fetch metadata for a given hex from ADSB.lol v2 and cache it.
+# Metadata fetching now lives in `airlogger.metadata`
+from airlogger.metadata import fetch_metadata
 
-    Returns (registration, model, operator, callsign)
-    """
-    cached = metadata_cache.get(hex_code)
-    if cached and time.time() - cached['timestamp'] < CACHE_TTL:
-        return cached.get('registration', ''), cached.get('model', ''), cached.get('operator', ''), cached.get('callsign', '')
-
-    # ADSB.lol v2 endpoint
-    tmpl = os.environ.get('AIRLOGGER_METADATA_URL', 'https://api.adsb.lol/v2/icao/{hex}')
-    try:
-        try:
-            candidate = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
-        except Exception:
-            candidate = tmpl.replace('{hex}', hex_code)
-
-        response = requests.get(candidate, timeout=5)
-        if response.status_code != 200:
-            logger.debug(f"ADSB.lol returned HTTP {response.status_code} for {candidate}")
-            data = None
-        else:
-            try:
-                data = response.json()
-            except Exception:
-                data = None
-
-        reg = ''
-        model = ''
-        operator = ''
-        callsign = ''
-
-        if isinstance(data, dict):
-            item = None
-            if 'ac' in data and isinstance(data['ac'], list) and data['ac']:
-                item = data['ac'][0]
-
-            def pick_first(src, keys):
-                if not src or not isinstance(src, dict):
-                    return None
-                for k in keys:
-                    if k in src and src.get(k):
-                        return src.get(k)
-                return None
-
-            if item:
-                reg = pick_first(item, ('r', 'reg', 'registration', 'tail', 'tail_number')) or ''
-                model = pick_first(item, ('t', 'type', 'typecode', 'model', 'aircraft_type')) or ''
-                operator = pick_first(item, ('ops', 'operator', 'owner', 'airline')) or ''
-                callsign = (pick_first(item, ('flight', 'callsign', 'flight_number')) or '').strip()
-
-            if not (reg or model or operator or callsign):
-                reg = pick_first(data, ('r', 'reg', 'registration')) or ''
-                model = pick_first(data, ('t', 'type', 'typecode', 'model')) or ''
-                operator = pick_first(data, ('ops', 'operator', 'owner')) or ''
-                callsign = (pick_first(data, ('flight', 'callsign')) or '').strip()
-
-        if reg or model or operator or callsign:
-            metadata_cache[hex_code] = {
-                'registration': reg or '',
-                'model': model or '',
-                'operator': operator or '',
-                'callsign': callsign or '',
-                'timestamp': time.time()
-            }
-            if hex_code in metadata_failures:
-                del metadata_failures[hex_code]
-            return reg or '', model or '', operator or '', callsign or ''
-    except requests.exceptions.Timeout:
-        logger.warning(f"Metadata fetch timeout for {hex_code} from {candidate}")
-    except requests.exceptions.RequestException as e:
-        logger.warning(f"Metadata fetch failed for {hex_code} from {candidate}: {e}")
-    except Exception as e:
-        logger.debug(f"Unexpected parsing error for metadata from {candidate}: {e}")
-
-    return '', '', '', ''
+# NOTE: metadata_cache and metadata_failures were moved into the metadata module.
 
 def parse_message(message):
     try:
@@ -409,7 +337,31 @@ while running:
             # Heartbeat logging
             if current_time - last_heartbeat >= HEARTBEAT_INTERVAL:
                 logger.info(f"Heartbeat: Still running. Processed {line_count} lines since last heartbeat")
-                logger.info(f"Memory stats - Cache: {len(metadata_cache)}, Throttle: {len(last_logged_times)}")
+                logger.info(f"Memory stats - Cache: {len(metadata.metadata_cache)}, Throttle: {len(last_logged_times)}")
+                # Write heartbeat file for dashboard health checks
+                try:
+                    import json
+                    import tempfile
+                    from airlogger.config import HEARTBEAT_FILE
+
+                    hb = {
+                        "timestamp": current_time,
+                        "iso": datetime.utcfromtimestamp(current_time).isoformat() + "Z",
+                        "pid": os.getpid(),
+                        "processed_since_last": line_count,
+                        "cache_size": len(metadata.metadata_cache),
+                    }
+                    dirpath = os.path.dirname(HEARTBEAT_FILE)
+                    os.makedirs(dirpath, exist_ok=True)
+                    # atomic write
+                    with tempfile.NamedTemporaryFile('w', delete=False, dir=dirpath, encoding='utf-8') as tmp:
+                        json.dump(hb, tmp)
+                        tmp.flush()
+                        tmp_name = tmp.name
+                    os.replace(tmp_name, HEARTBEAT_FILE)
+                except Exception as e:
+                    logger.debug(f"Failed to write heartbeat file: {e}")
+
                 last_heartbeat = current_time
                 line_count = 0
             

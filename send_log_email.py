@@ -9,15 +9,21 @@ import csv
 import logging
 from logging.handlers import RotatingFileHandler
 import sys
+import shutil
+import os
 
 # Load environment variables
 load_dotenv()
 
-EMAIL_HOST = os.getenv("SMTP_SERVER")
-EMAIL_PORT = int(os.getenv("SMTP_PORT", 587))
-EMAIL_ADDRESS = os.getenv("EMAIL_USER")
-EMAIL_PASSWORD = os.getenv("EMAIL_PASSWORD")
-EMAIL_RECIPIENT = os.getenv("EMAIL_TO")
+from airlogger.config import SMTP_SERVER, SMTP_PORT, SMTP_USER, SMTP_PASSWORD, EMAIL_FROM, EMAIL_TO, SMTP_USE_SSL, SMTP_TIMEOUT
+
+EMAIL_HOST = SMTP_SERVER
+EMAIL_PORT = SMTP_PORT
+EMAIL_ADDRESS = SMTP_USER
+EMAIL_PASSWORD = SMTP_PASSWORD
+EMAIL_RECIPIENT = EMAIL_TO
+SMTP_USE_SSL = SMTP_USE_SSL
+SMTP_TIMEOUT = SMTP_TIMEOUT
 
 LOG_DIR = os.path.expanduser("~/aircraft-logger/logs")
 # Allow date override via command line argument
@@ -46,6 +52,14 @@ console_handler.setFormatter(formatter)
 logger.addHandler(console_handler)
 
 def send_email():
+    # Validate SMTP configuration
+    from airlogger.config import validate_smtp_config
+
+    ok, missing = validate_smtp_config()
+    if not ok:
+        logger.error(f"Missing SMTP/email configuration: {', '.join(missing)}. Aborting email send.")
+        return
+
     if not os.path.exists(LOG_FILE):
         logger.error(f"No log file found for {TODAY}")
         return
@@ -56,7 +70,7 @@ def send_email():
     operator_counts = {}
     model_counts = {}
     try:
-        with open(LOG_FILE, "r") as f:
+        with open(LOG_FILE, "r", encoding="utf-8") as f:
             reader = csv.DictReader(f)
             for row in reader:
                 total_records += 1
@@ -94,24 +108,61 @@ def send_email():
     msg["Subject"] = subject
 
     msg.attach(MIMEText(summary_text, "plain"))
+    # Attach a compressed version of the log to reduce size for large logs
     try:
-        with open(LOG_FILE, "rb") as f:
-            part = MIMEApplication(f.read(), Name=os.path.basename(LOG_FILE))
-        part['Content-Disposition'] = f'attachment; filename="{os.path.basename(LOG_FILE)}"'
+        import gzip
+        import tempfile
+
+        with tempfile.NamedTemporaryFile(delete=False, suffix=".gz") as tmp:
+            with open(LOG_FILE, "rb") as src, gzip.GzipFile(fileobj=tmp, mode="wb") as gz:
+                shutil.copyfileobj(src, gz)
+            tmp_path = tmp.name
+
+        with open(tmp_path, "rb") as f:
+            part = MIMEApplication(f.read(), Name=os.path.basename(tmp_path))
+        part["Content-Disposition"] = f'attachment; filename="{os.path.basename(tmp_path)}"'
         msg.attach(part)
     except Exception as e:
-        logger.error(f"Failed to attach log file {LOG_FILE}: {e}")
+        logger.error(f"Failed to attach compressed log file for {LOG_FILE}: {e}")
         return
 
+    # Send with retries (handle STARTTLS or SSL)
+    import smtplib as _smtplib
+    from time import sleep
+
+    attempts = 0
+    max_attempts = 3
+    tmp_path = locals().get('tmp_path') if 'tmp_path' in locals() else None
     try:
-        server = smtplib.SMTP(EMAIL_HOST, EMAIL_PORT)
-        server.starttls()
-        server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
-        server.send_message(msg)
-        server.quit()
-        logger.info("✅ Email sent successfully.")
-    except Exception as e:
-        logger.error(f"❌ Failed to send email: {e}")
+        while attempts < max_attempts:
+            try:
+                if SMTP_USE_SSL or EMAIL_PORT == 465:
+                    server = _smtplib.SMTP_SSL(EMAIL_HOST, EMAIL_PORT, timeout=SMTP_TIMEOUT)
+                else:
+                    server = _smtplib.SMTP(EMAIL_HOST, EMAIL_PORT, timeout=SMTP_TIMEOUT)
+                    server.ehlo()
+                    server.starttls()
+
+                server.login(EMAIL_ADDRESS, EMAIL_PASSWORD)
+                server.send_message(msg)
+                server.quit()
+                logger.info("✅ Email sent successfully.")
+                break
+            except _smtplib.SMTPException as e:
+                attempts += 1
+                logger.warning(f"SMTP send attempt {attempts} failed: {e}")
+                if attempts < max_attempts:
+                    sleep(2 ** attempts)
+                else:
+                    logger.error(f"❌ Failed to send email after {attempts} attempts: {e}")
+                    break
+    finally:
+        # cleanup temp compressed file if created
+        try:
+            if tmp_path and os.path.exists(tmp_path):
+                os.remove(tmp_path)
+        except Exception:
+            pass
 
 if __name__ == "__main__":
     send_email()

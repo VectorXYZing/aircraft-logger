@@ -23,7 +23,8 @@ pip install -r requirements.txt
 
 # Install specific required packages
 echo "📦 Installing specific required packages..."
-pip install flask pytz pandas
+# pandas is not required for base functionality; only install if requested
+pip install flask pytz
 
 # Create logs directory
 mkdir -p logs
@@ -44,6 +45,8 @@ fi
 
 # Set up systemd service for aircraft logger
 echo "🔁 Setting up aircraft logger service..."
+SERVICE_USER=${AIRLOGGER_SERVICE_USER:-$USER}
+INSTALL_DIR=${AIRLOGGER_INSTALL_DIR:-$PWD}
 cat <<EOF | sudo tee /etc/systemd/system/aircraft-logger.service > /dev/null
 [Unit]
 Description=Aircraft Logger
@@ -51,11 +54,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=ps
-Group=ps
-WorkingDirectory=/home/ps/aircraft-logger
-Environment="PATH=/home/ps/aircraft-logger/venv/bin"
-ExecStart=/home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/aircraft_logger.py
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=${INSTALL_DIR}
+Environment="PATH=${INSTALL_DIR}/venv/bin"
+ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/aircraft_logger.py
 Restart=always
 RestartSec=10
 Environment="PYTHONUNBUFFERED=1"
@@ -66,6 +69,8 @@ EOF
 
 # Set up systemd service for dashboard
 echo "📊 Setting up aircraft dashboard service..."
+SERVICE_USER=${AIRLOGGER_SERVICE_USER:-$USER}
+INSTALL_DIR=${AIRLOGGER_INSTALL_DIR:-$PWD}
 cat <<EOF | sudo tee /etc/systemd/system/aircraft-dashboard.service > /dev/null
 [Unit]
 Description=Aircraft Logger Dashboard
@@ -73,11 +78,11 @@ After=network.target
 
 [Service]
 Type=simple
-User=ps
-Group=ps
-WorkingDirectory=/home/ps/aircraft-logger
-Environment="PATH=/home/ps/aircraft-logger/venv/bin"
-ExecStart=/home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/dashboard.py
+User=${SERVICE_USER}
+Group=${SERVICE_USER}
+WorkingDirectory=${INSTALL_DIR}
+Environment="PATH=${INSTALL_DIR}/venv/bin"
+ExecStart=${INSTALL_DIR}/venv/bin/python ${INSTALL_DIR}/dashboard.py
 Restart=always
 RestartSec=10
 Environment="PYTHONUNBUFFERED=1"
