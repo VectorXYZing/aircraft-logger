@@ -8,6 +8,7 @@ import pytz
 import logging
 from logging.handlers import RotatingFileHandler
 import time
+from airlogger.metadata import fetch_metadata
 
 app = Flask(__name__)
 VERSION = "1.1.0"
@@ -111,14 +112,18 @@ def load_and_filter_csv(target_date_str):
                             continue
                         
                         row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
-                        hex_code = row.get("Hex", "")
+                        
+                        # Normalize hex for consistent matching
+                        hex_code = (row.get("Hex") or "").strip().upper()
+                        row["Hex"] = hex_code # Update in row too
+                        
                         if hex_code:
                             if hex_code not in hex_metadata:
                                 hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
                             
-                            # Update metadata if we find a non-empty value
+                            # Update metadata if we find a non-empty value in the log
                             for field in ["Registration", "Model", "Operator"]:
-                                val = row.get(field, "")
+                                val = (row.get(field) or "").strip()
                                 if val and not hex_metadata[hex_code][field]:
                                     hex_metadata[hex_code][field] = val
                         
@@ -129,28 +134,50 @@ def load_and_filter_csv(target_date_str):
         logger.error(f"Error loading CSV files: {e}")
         return [], 0, 0, [], []
 
-    # Second pass: Backfill metadata and collect stats
+    # Second pass: Fetch missing metadata from API if still missing, and collect stats
     unique_hexes = set()
     operator_counts = Counter()
     model_counts = Counter()
+    # To avoid double counting same aircraft in charts
+    hexes_accounted_for = set()
 
     for row in aircraft_data:
-        hex_code = row.get("Hex", "")
-        if hex_code in hex_metadata:
-            meta = hex_metadata[hex_code]
-            for field in ["Registration", "Model", "Operator"]:
-                if not row.get(field) and meta[field]:
-                    row[field] = meta[field]
-        
+        hex_code = (row.get("Hex") or "").strip().upper()
+        if not hex_code:
+            continue
+            
         unique_hexes.add(hex_code)
         
-        op = row.get("Operator", "")
-        if op:
-            operator_counts[op] += 1
-            
-        model = row.get("Model", "")
-        if model:
-            model_counts[model] += 1
+        # If still missing metadata after scanning logs, try fetching it
+        meta = hex_metadata.get(hex_code, {})
+        if not meta.get("Operator") or not meta.get("Model"):
+            # This call is cached in airlogger.metadata
+            reg, model, operator, _ = fetch_metadata(hex_code)
+            if hex_code not in hex_metadata:
+                hex_metadata[hex_code] = {}
+            if operator: hex_metadata[hex_code]["Operator"] = operator
+            if model: hex_metadata[hex_code]["Model"] = model
+            if reg: hex_metadata[hex_code]["Registration"] = reg
+            meta = hex_metadata[hex_code]
+
+        # Apply metadata to row
+        for field in ["Registration", "Model", "Operator"]:
+            current_val = (row.get(field) or "").strip()
+            if not current_val and meta.get(field):
+                row[field] = meta[field]
+        
+        # Count for charts (one count per unique aircraft per day)
+        if hex_code not in hexes_accounted_for:
+            op = (row.get("Operator") or "").strip()
+            if op:
+                operator_counts[op] += 1
+                
+            model = (row.get("Model") or "").strip()
+            if model:
+                model_counts[model] += 1
+            hexes_accounted_for.add(hex_code)
+
+    logger.info(f"Summary for {target_date_str}: {len(aircraft_data)} rows, {len(unique_hexes)} unique aircraft. Metadata found for {len(hex_metadata)} hexes.")
 
     aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
     return aircraft_data, len(aircraft_data), len(unique_hexes), operator_counts.most_common(5), model_counts.most_common(5)
