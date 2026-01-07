@@ -11,7 +11,7 @@ import time
 from airlogger.metadata import fetch_metadata
 
 app = Flask(__name__)
-VERSION = "1.1.3"
+VERSION = "1.1.4"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -134,40 +134,18 @@ def load_and_filter_csv(target_date_str):
         logger.error(f"Error loading CSV files: {e}")
         return [], 0, 0, [], []
 
-    # Second pass: Optimize metadata fetching (once per unique hex)
-    unique_hexes = set()
-    for row in aircraft_data:
-        hex_code = (row.get("Hex") or "").strip().upper()
-        if hex_code:
-            unique_hexes.add(hex_code)
-
-    # For each unique hex, if we don't have metadata from the logs, try the API
-    for hex_code in unique_hexes:
-        if hex_code not in hex_metadata:
-            hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
-        
-        meta = hex_metadata[hex_code]
-        if not meta.get("Operator") or not meta.get("Model"):
-            reg, model, operator, _ = fetch_metadata(hex_code)
-            if operator and not meta.get("Operator"): meta["Operator"] = operator
-            if model and not meta.get("Model"): meta["Model"] = model
-            if reg and not meta.get("Registration"): meta["Registration"] = reg
-            
-            # Ensure we don't keep trying this hex if it failed
-            if not meta.get("Operator"): meta["Operator"] = ""
-            if not meta.get("Model"): meta["Model"] = ""
-
-    # Third pass: Backfill metadata and collect stats
+    # Second pass: Backfill metadata and collect stats
     operator_counts = Counter()
     model_counts = Counter()
     # To avoid double counting same aircraft in charts
-    hexes_accounted_for = set()
+    hexes_seen = set()
 
     for row in aircraft_data:
         hex_code = (row.get("Hex") or "").strip().upper()
         if not hex_code:
             continue
             
+        hexes_seen.add(hex_code)
         meta = hex_metadata.get(hex_code, {})
         
         # Apply metadata to row
@@ -176,21 +154,22 @@ def load_and_filter_csv(target_date_str):
             if not current_val and meta.get(field):
                 row[field] = meta[field]
         
-        # Count for charts (one count per unique aircraft per day)
-        if hex_code not in hexes_accounted_for:
-            op = (row.get("Operator") or "").strip()
+    # Third pass: Collect stats once per unique hex
+    for hex_code, meta in hex_metadata.items():
+        if hex_code in hexes_seen:
+            op = (meta.get("Operator") or "").strip()
             if op:
                 operator_counts[op] += 1
                 
-            model = (row.get("Model") or "").strip()
+            model = (meta.get("Model") or "").strip()
             if model:
                 model_counts[model] += 1
-            hexes_accounted_for.add(hex_code)
 
-    logger.info(f"Summary for {target_date_str}: {len(aircraft_data)} rows, {len(unique_hexes)} unique aircraft. Metadata found for {len(hex_metadata)} hexes.")
+    unique_count = len(hexes_seen)
+    logger.info(f"Summary for {target_date_str}: {len(aircraft_data)} rows, {unique_count} unique aircraft. Metadata found for {len(hex_metadata)} hexes.")
 
     aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
-    return aircraft_data, len(aircraft_data), len(unique_hexes), operator_counts.most_common(5), model_counts.most_common(5)
+    return aircraft_data, len(aircraft_data), unique_count, operator_counts.most_common(5), model_counts.most_common(5)
 
 @app.route("/")
 def index():
