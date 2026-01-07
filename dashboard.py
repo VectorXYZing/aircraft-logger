@@ -10,7 +10,7 @@ from logging.handlers import RotatingFileHandler
 import time
 
 app = Flask(__name__)
-VERSION = "1.1.5"
+VERSION = "1.1.6"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -103,28 +103,39 @@ def load_and_filter_csv(target_date_str):
 
                 with file_handle:
                     reader = csv.DictReader(file_handle)
+                    if not reader.fieldnames:
+                        continue
+                        
+                    # Normalize fieldnames (handle extra spaces or case differences)
+                    field_map = {f.strip().lower(): f for f in reader.fieldnames}
+                    
+                    def get_row_val(r, key):
+                        actual_key = field_map.get(key.lower())
+                        return (r.get(actual_key) or "").strip() if actual_key else ""
+
                     for row in reader:
-                        local_time = convert_to_local(row.get("Time UTC", ""))
-                        if not local_time:
-                            continue
-                        if local_time.date() != target_date:
+                        time_utc = get_row_val(row, "Time UTC")
+                        local_time = convert_to_local(time_utc)
+                        if not local_time or local_time.date() != target_date:
                             continue
                         
                         row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
                         
-                        # Normalize hex for consistent matching
-                        hex_code = (row.get("Hex") or "").strip().upper()
-                        row["Hex"] = hex_code # Update in row too
+                        hex_code = get_row_val(row, "Hex").upper()
+                        row["Hex"] = hex_code
                         
                         if hex_code:
                             if hex_code not in hex_metadata:
                                 hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
                             
-                            # Update metadata if we find a non-empty value in the log
                             for field in ["Registration", "Model", "Operator"]:
-                                val = (row.get(field) or "").strip()
-                                if val and not hex_metadata[hex_code][field]:
-                                    hex_metadata[hex_code][field] = val
+                                val = get_row_val(row, field)
+                                if val:
+                                    # Update if we have better data
+                                    if not hex_metadata[hex_code][field] or len(val) > len(hex_metadata[hex_code][field]):
+                                        hex_metadata[hex_code][field] = val
+                                # Keep the row data consistent with normalized fields
+                                row[field] = val
                         
                         aircraft_data.append(row)
             except Exception as e:
@@ -133,38 +144,31 @@ def load_and_filter_csv(target_date_str):
         logger.error(f"Error loading CSV files: {e}")
         return [], 0, 0, [], []
 
-    # Second pass: Backfill metadata and collect stats
+    # Second pass: Apply best-known metadata to every row
+    for row in aircraft_data:
+        hex_code = row.get("Hex")
+        if hex_code and hex_code in hex_metadata:
+            meta = hex_metadata[hex_code]
+            for field in ["Registration", "Model", "Operator"]:
+                if not row.get(field) and meta[field]:
+                    row[field] = meta[field]
+        
+    # Third pass: Collect statistics (one count per unique aircraft)
+    unique_hexes_this_day = {row.get("Hex") for row in aircraft_data if row.get("Hex")}
     operator_counts = Counter()
     model_counts = Counter()
-    # To avoid double counting same aircraft in charts
-    hexes_seen = set()
 
-    for row in aircraft_data:
-        hex_code = (row.get("Hex") or "").strip().upper()
-        if not hex_code:
-            continue
-            
-        hexes_seen.add(hex_code)
+    for hex_code in unique_hexes_this_day:
         meta = hex_metadata.get(hex_code, {})
+        op = meta.get("Operator", "").strip()
+        if op:
+            operator_counts[op] += 1
         
-        # Apply metadata to row
-        for field in ["Registration", "Model", "Operator"]:
-            current_val = (row.get(field) or "").strip()
-            if not current_val and meta.get(field):
-                row[field] = meta[field]
-        
-    # Third pass: Collect stats once per unique hex
-    for hex_code, meta in hex_metadata.items():
-        if hex_code in hexes_seen:
-            op = (meta.get("Operator") or "").strip()
-            if op:
-                operator_counts[op] += 1
-                
-            model = (meta.get("Model") or "").strip()
-            if model:
-                model_counts[model] += 1
+        mdl = meta.get("Model", "").strip()
+        if mdl:
+            model_counts[mdl] += 1
 
-    unique_count = len(hexes_seen)
+    unique_count = len(unique_hexes_this_day)
     logger.info(f"Summary for {target_date_str}: {len(aircraft_data)} rows, {unique_count} unique aircraft. Metadata found for {len(hex_metadata)} hexes.")
 
     aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
