@@ -151,7 +151,10 @@
     <div class="container-fluid py-4">
         <div class="row justify-content-center">
             <div class="col-12 col-xl-10">
-                <h1 class="display-4 text-center mb-4">🛫 Aircraft Logger Dashboard</h1>
+                <div class="text-center mb-4">
+                    <h1 class="display-4 mb-0">🛫 Aircraft Logger Dashboard</h1>
+                    <small class="text-muted">v{{ version }}</small>
+                </div>
 
                 <form method="get" class="mb-4 d-flex justify-content-center gap-2">
                     <input type="date" name="date" class="form-control w-auto"
@@ -210,8 +213,8 @@
                     </div>
                 </div>
 
-                <div class="row g-4 mb-4">
-                    <div class="col-md-6">
+                <div class="row g-4 mb-4 justify-content-center">
+                    <div class="col-md-4">
                         <div class="card h-100">
                             <div class="card-body">
                                 <h5 class="card-title">Top Operators</h5>
@@ -219,15 +222,15 @@
                             </div>
                         </div>
                     </div>
-                    <div class="col-md-6">
+                    <div class="col-md-4">
                         <div class="card h-100">
                             <div class="card-body">
                                 <h5 class="card-title">Model Distribution</h5>
                                 <canvas id="modelsChart"></canvas>
+                            </div>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </div>
-    </div>
     {% endif %}
 
                 <div class="card shadow-sm">

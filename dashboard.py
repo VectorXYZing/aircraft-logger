@@ -10,6 +10,7 @@ from logging.handlers import RotatingFileHandler
 import time
 
 app = Flask(__name__)
+VERSION = "1.1.0"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -75,9 +76,8 @@ def convert_to_local(utc_str):
 
 def load_and_filter_csv(target_date_str):
     aircraft_data = []
-    unique_hexes = set()
-    operator_counts = Counter()
-    model_counts = Counter()
+    # Use a dictionary to keep track of the best metadata seen for each hex
+    hex_metadata = {}
 
     try:
         target_date = datetime.strptime(target_date_str, "%Y-%m-%d").date()
@@ -109,20 +109,48 @@ def load_and_filter_csv(target_date_str):
                             continue
                         if local_time.date() != target_date:
                             continue
+                        
                         row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
+                        hex_code = row.get("Hex", "")
+                        if hex_code:
+                            if hex_code not in hex_metadata:
+                                hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
+                            
+                            # Update metadata if we find a non-empty value
+                            for field in ["Registration", "Model", "Operator"]:
+                                val = row.get(field, "")
+                                if val and not hex_metadata[hex_code][field]:
+                                    hex_metadata[hex_code][field] = val
+                        
                         aircraft_data.append(row)
-                        unique_hexes.add(row.get("Hex", ""))
-                        operator = row.get("Operator", "")
-                        if operator:
-                            operator_counts[operator] += 1
-                        model = row.get("Model", "")
-                        if model:
-                            model_counts[model] += 1
             except Exception as e:
                 logger.error(f"Failed to read file {filepath}: {e}")
     except Exception as e:
         logger.error(f"Error loading CSV files: {e}")
         return [], 0, 0, [], []
+
+    # Second pass: Backfill metadata and collect stats
+    unique_hexes = set()
+    operator_counts = Counter()
+    model_counts = Counter()
+
+    for row in aircraft_data:
+        hex_code = row.get("Hex", "")
+        if hex_code in hex_metadata:
+            meta = hex_metadata[hex_code]
+            for field in ["Registration", "Model", "Operator"]:
+                if not row.get(field) and meta[field]:
+                    row[field] = meta[field]
+        
+        unique_hexes.add(hex_code)
+        
+        op = row.get("Operator", "")
+        if op:
+            operator_counts[op] += 1
+            
+        model = row.get("Model", "")
+        if model:
+            model_counts[model] += 1
 
     aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
     return aircraft_data, len(aircraft_data), len(unique_hexes), operator_counts.most_common(5), model_counts.most_common(5)
@@ -167,7 +195,7 @@ def index():
         except Exception as e:
             logger.error(f"Error checking health status: {e}")
 
-        return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local, health_status=health_status)
+        return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local, health_status=health_status, version=VERSION)
     except Exception as e:
         logger.error(f"Error in dashboard route: {e}")
         return "An error occurred while loading the dashboard.", 500
