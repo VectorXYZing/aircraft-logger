@@ -8,7 +8,6 @@ import pytz
 import logging
 from logging.handlers import RotatingFileHandler
 import time
-from airlogger.metadata import fetch_metadata
 
 app = Flask(__name__)
 VERSION = "1.1.4"
