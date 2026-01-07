@@ -34,9 +34,14 @@ def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
         manufacturer = data.get("manufacturerName") or ""
         if manufacturer:
             model = manufacturer
-    operator = data.get("operator") or data.get("owner") or ""
-    callsign = data.get("operatorCallsign") or ""
-    return reg or "", model or "", operator or "", callsign or ""
+    operator = (data.get("operator") or "").strip()
+    owner = (data.get("owner") or "").strip()
+    
+    # Use owner as fallback if operator is missing
+    final_operator = operator if operator else owner
+    
+    callsign = (data.get("operatorCallsign") or "").strip()
+    return reg or "", model or "", final_operator or "", callsign or ""
 
 
 def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
