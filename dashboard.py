@@ -11,7 +11,7 @@ import time
 from airlogger.metadata import fetch_metadata
 
 app = Flask(__name__)
-VERSION = "1.1.1"
+VERSION = "1.1.2"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -148,17 +148,19 @@ def load_and_filter_csv(target_date_str):
             
         unique_hexes.add(hex_code)
         
+        # Ensure we have a dict entry for this hex
+        if hex_code not in hex_metadata:
+            hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
+            
+        meta = hex_metadata[hex_code]
+        
         # If still missing metadata after scanning logs, try fetching it
-        meta = hex_metadata.get(hex_code, {})
         if not meta.get("Operator") or not meta.get("Model"):
             # This call is cached in airlogger.metadata
             reg, model, operator, _ = fetch_metadata(hex_code)
-            if hex_code not in hex_metadata:
-                hex_metadata[hex_code] = {}
-            if operator: hex_metadata[hex_code]["Operator"] = operator
-            if model: hex_metadata[hex_code]["Model"] = model
-            if reg: hex_metadata[hex_code]["Registration"] = reg
-            meta = hex_metadata[hex_code]
+            if operator and not meta.get("Operator"): meta["Operator"] = operator
+            if model and not meta.get("Model"): meta["Model"] = model
+            if reg and not meta.get("Registration"): meta["Registration"] = reg
 
         # Apply metadata to row
         for field in ["Registration", "Model", "Operator"]:
