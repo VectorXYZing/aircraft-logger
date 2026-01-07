@@ -11,7 +11,7 @@ import time
 from airlogger.metadata import fetch_metadata
 
 app = Flask(__name__)
-VERSION = "1.1.0"
+VERSION = "1.1.1"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
