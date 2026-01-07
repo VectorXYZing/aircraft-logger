@@ -143,7 +143,31 @@ def index():
             "top_models": top_models
         }
 
-        return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local)
+        # Check health status
+        health_status = {"healthy": False, "age_seconds": None}
+        try:
+            from airlogger.config import HEARTBEAT_FILE, HEALTH_THRESHOLD
+            import json
+            hb = None
+            if os.path.exists(HEARTBEAT_FILE):
+                try:
+                    with open(HEARTBEAT_FILE, 'r', encoding='utf-8') as hf:
+                        hb = json.load(hf)
+                except Exception:
+                    hb = None
+
+            if hb and isinstance(hb, dict) and 'timestamp' in hb:
+                age = time.time() - hb['timestamp']
+                healthy = age <= HEALTH_THRESHOLD
+                health_status = {
+                    "healthy": healthy,
+                    "age_seconds": int(age),
+                    "last_seen_iso": hb.get('iso')
+                }
+        except Exception as e:
+            logger.error(f"Error checking health status: {e}")
+
+        return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local, health_status=health_status)
     except Exception as e:
         logger.error(f"Error in dashboard route: {e}")
         return "An error occurred while loading the dashboard.", 500
