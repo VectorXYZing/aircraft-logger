@@ -240,16 +240,33 @@ from airlogger.metadata import fetch_metadata
 # NOTE: metadata_cache and metadata_failures were moved into the metadata module.
 
 def parse_message(message):
+    """
+    Parse BaseStation port 30003 format messages.
+    Format: MSG,type,id,session,hex,session_id,date,time,date,time,callsign,altitude,speed,track,lat,lon,rate,squawk,alert,emergency,spi,ground
+    """
     try:
         parts = message.strip().split(',')
-        if len(parts) < 22:
+        if len(parts) < 11:
             return None
-        hex_code = parts[4].strip()
-        callsign = parts[10].strip()
-        altitude = parts[11].strip()
-        speed = parts[12].strip()
-        lat = parts[14].strip()
-        lon = parts[15].strip()
+            
+        # Message type is parts[1]
+        # Callsign is parts[10]
+        # Hex code is parts[4]
+        
+        msg_type = parts[1].strip()
+        hex_code = parts[4].strip().upper()
+        
+        # BaseStation format has up to 22 fields, but we only need up to longevity
+        callsign = parts[10].strip() if len(parts) > 10 else ""
+        altitude = parts[11].strip() if len(parts) > 11 else ""
+        speed = parts[12].strip() if len(parts) > 12 else ""
+        lat = parts[14].strip() if len(parts) > 14 else ""
+        lon = parts[15].strip() if len(parts) > 15 else ""
+        
+        # We need at least a hex code
+        if not hex_code:
+            return None
+            
         return hex_code, callsign, altitude, speed, lat, lon
     except Exception as e:
         logger.debug(f"Failed to parse message: {e}")
