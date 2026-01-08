@@ -86,6 +86,7 @@ def get_operator_from_callsign(callsign: str, country: str = "") -> str:
         "JBU": "JetBlue",
         "QFA": "Qantas",
         "ANZ": "Air New Zealand",
+        "NZ": "Air New Zealand",
         "VA": "Virgin Australia",
         "VOZ": "Virgin Australia",
         "VIR": "Virgin Atlantic",
@@ -199,16 +200,111 @@ def _parse_metadata_response(data: dict) -> Tuple[str, str, str, str]:
     return reg, model, final_operator or "", callsign
 
 
-def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
-    """Fetch metadata for a given ICAO hex using OpenSky with caching and retries.
+# Multiple metadata sources for comprehensive aircraft lookup
+ADSBLOL_URL = "https://api.adsb.lol/v2/icao/{hex}"
+OPENSKY_METADATA_URL = "https://opensky-network.org/api/metadata/aircraft/icao/{hex}"
+OPENSKY_STATES_URL = "https://opensky-network.org/api/states/all"
 
-    Returns a tuple: (registration, model, operator, callsign)
-    """
+# File to store aircraft database of known registrations and operators
+AIRCRAFT_DB_FILE = os.path.expanduser("~/.aircraft_db.json")
+
+def _load_aircraft_db() -> Dict[str, dict]:
+    """Load persistent aircraft database."""
+    if os.path.exists(AIRCRAFT_DB_FILE):
+        try:
+            with open(AIRCRAFT_DB_FILE, 'r') as f:
+                return json.load(f)
+        except Exception:
+            pass
+    return {}
+
+def _save_aircraft_db(db: Dict[str, dict]):
+    """Save aircraft database persistently."""
+    try:
+        with open(AIRCRAFT_DB_FILE, 'w') as f:
+            json.dump(db, f, indent=2)
+    except Exception as e:
+        logger.warning(f"Failed to save aircraft database: {e}")
+
+def _update_aircraft_db(hex_code: str, reg: str, model: str, operator: str, callsign: str):
+    """Update persistent aircraft database with new information."""
+    db = _load_aircraft_db()
+    
+    # Update only if we have new information
+    if hex_code not in db:
+        db[hex_code] = {}
+    
+    if reg and not db[hex_code].get("registration"):
+        db[hex_code]["registration"] = reg
+    if model and not db[hex_code].get("model"):
+        db[hex_code]["model"] = model
+    if operator and not db[hex_code].get("operator"):
+        db[hex_code]["operator"] = operator
+    if callsign and not db[hex_code].get("callsign"):
+        db[hex_code]["callsign"] = callsign
+    
+    # Always update last_seen
+    db[hex_code]["last_seen"] = time.time()
+    
+    _save_aircraft_db(db)
+
+def _get_from_aircraft_db(hex_code: str) -> Tuple[str, str, str, str]:
+    """Get aircraft information from local database."""
+    db = _load_aircraft_db()
+    aircraft = db.get(hex_code.lower())
+    
+    if aircraft:
+        return (
+            aircraft.get("registration", ""),
+            aircraft.get("model", ""),
+            aircraft.get("operator", ""),
+            aircraft.get("callsign", "")
+        )
+    
+    return "", "", "", ""
+
+def _parse_opensky_metadata(data: dict) -> Tuple[str, str, str, str]:
+    """Parse OpenSky metadata API response."""
+    reg = (data.get("registration") or data.get("reg") or "").strip()
+    model = (data.get("model") or "").strip()
+    if not model:
+        manufacturer = (data.get("manufacturerName") or "").strip()
+        if manufacturer:
+            model = manufacturer
+    operator = (data.get("operator") or "").strip()
+    callsign = (data.get("operatorCallsign") or "").strip()
+    country = (data.get("country") or "").strip()
+    
+    if not operator:
+        operator = (data.get("owner") or "").strip()
+    
+    return reg, model, operator, callsign, country
+
+def _parse_opensky_states(data: dict, hex_code: str) -> Tuple[str, str, str, str]:
+    """Parse OpenSky states API response for live flight data."""
+    if "states" not in data or not data["states"]:
+        return "", "", "", ""
+    
+    # Find matching aircraft by hex code
+    for state in data["states"]:
+        if len(state) >= 17 and state[0].upper() == hex_code.upper():
+            reg = (state[1] or "").strip()  # registration
+            callsign = (state[10] or "").strip()  # callsign
+            operator = ""  # Derive from callsign
+            model = ""  # States API doesn't provide model
+            
+            return reg, model, operator, callsign
+    
+    return "", "", "", ""
+
+def fetch_metadata_comprehensive(hex_code: str) -> Tuple[str, str, str, str]:
+    """Comprehensive metadata fetching with multiple sources and fallbacks."""
     if not hex_code:
         return "", "", "", ""
 
     hex_code = hex_code.strip().lower()
 
+    # Check cache first
     cached = metadata_cache.get(hex_code)
     if cached and time.time() - cached["timestamp"] < CACHE_TTL:
         return (
@@ -218,52 +314,142 @@ def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
             cached.get("callsign", ""),
         )
 
-    tmpl = os.environ.get("AIRLOGGER_METADATA_URL", METADATA_URL)
+    # Check local aircraft database
+    db_reg, db_model, db_operator, db_callsign = _get_from_aircraft_db(hex_code)
+    
+    final_reg = db_reg
+    final_model = db_model
+    final_operator = db_operator
+    final_callsign = db_callsign
+    
+    # Try adsb.lol (live flight data)
     try:
-        try:
-            url = tmpl.format(hex=hex_code, hex_lower=hex_code.lower(), hex_upper=hex_code.upper())
-        except Exception:
-            url = tmpl.replace("{hex}", hex_code)
-
-        last_exc = None
-        for attempt in range(1, MAX_RETRIES + 1):
-            try:
-                resp = requests.get(url, timeout=5)
-                if resp.status_code != 200:
-                    logger.debug("OpenSky returned HTTP %s for %s", resp.status_code, url)
-                    data = None
-                else:
-                    try:
-                        data = resp.json()
-                    except Exception:
-                        data = None
-
-                if data and isinstance(data, dict):
-                    reg, model, operator, meta_callsign = _parse_metadata_response(data)
-                    if reg or model or operator or meta_callsign:
-                        metadata_cache[hex_code] = {
-                            "registration": reg,
-                            "model": model,
-                            "operator": operator,
-                            "callsign": callsign,
-                            "timestamp": time.time(),
-                        }
-                        return reg, model, operator, callsign
-                # No useful data yet; treat as a failure to be retried
-                last_exc = None
-            except requests.exceptions.Timeout as e:
-                last_exc = e
-                logger.warning("Metadata fetch timeout for %s (attempt %s)", hex_code, attempt)
-            except requests.exceptions.RequestException as e:
-                last_exc = e
-                logger.warning("Metadata fetch failed for %s (attempt %s): %s", hex_code, attempt, e)
-
-            # Backoff before next retry
-            if attempt < MAX_RETRIES:
-                backoff = BACKOFF_BASE * (2 ** (attempt - 1))
-                time.sleep(backoff)
-
+        url = ADSBLOL_URL.format(hex=hex_code)
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data and "ac" in data and data["ac"]:
+                # Parse adsb.lol response
+                ac = data["ac"][0]
+                reg = (ac.get("r") or "").strip()
+                model = (ac.get("t") or "").strip()
+                callsign = (ac.get("flight") or "").strip()
+                
+                # Update with any new information
+                if reg:
+                    final_reg = reg
+                if model:
+                    final_model = model
+                if callsign:
+                    final_callsign = callsign
+                
+                # Derive operator from callsign if we have one
+                if final_callsign and not final_operator:
+                    final_operator = get_operator_from_callsign(final_callsign)
+                
+                # Update database and cache
+                _update_aircraft_db(hex_code, final_reg, final_model, final_operator, final_callsign)
+                
+                # Cache the result
+                metadata_cache[hex_code] = {
+                    "registration": final_reg,
+                    "model": final_model,
+                    "operator": final_operator,
+                    "callsign": final_callsign,
+                    "timestamp": time.time(),
+                }
+                
+                return final_reg, final_model, final_operator, final_callsign
     except Exception as e:
-        logger.debug("Unexpected error fetching metadata for %s: %s", hex_code, e)
+        logger.debug(f"adsb.lol lookup failed for {hex_code}: {e}")
+
+    # Try OpenSky metadata API
+    try:
+        url = OPENSKY_METADATA_URL.format(hex=hex_code)
+        resp = requests.get(url, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data:
+                reg, model, operator, callsign, country = _parse_opensky_metadata(data)
+                
+                # Update with any new information
+                if reg:
+                    final_reg = reg
+                if model:
+                    final_model = model
+                if operator:
+                    final_operator = operator
+                if callsign:
+                    final_callsign = callsign
+                
+                # Derive operator from callsign if missing
+                if not final_operator and final_callsign:
+                    final_operator = get_operator_from_callsign(final_callsign, country)
+                
+                # Update database and cache
+                _update_aircraft_db(hex_code, final_reg, final_model, final_operator, final_callsign)
+                
+                # Cache the result
+                metadata_cache[hex_code] = {
+                    "registration": final_reg,
+                    "model": final_model,
+                    "operator": final_operator,
+                    "callsign": final_callsign,
+                    "timestamp": time.time(),
+                }
+                
+                return final_reg, final_model, final_operator, final_callsign
+    except Exception as e:
+        logger.debug(f"OpenSky metadata lookup failed for {hex_code}: {e}")
+
+    # Try OpenSky states API (live data)
+    try:
+        resp = requests.get(OPENSKY_STATES_URL, timeout=5)
+        if resp.status_code == 200:
+            data = resp.json()
+            if data:
+                reg, model, operator, callsign = _parse_opensky_states(data, hex_code)
+                
+                # Update with any new information
+                if reg:
+                    final_reg = reg
+                if callsign:
+                    final_callsign = callsign
+                
+                # Derive operator from callsign if we have one
+                if final_callsign and not final_operator:
+                    final_operator = get_operator_from_callsign(final_callsign)
+                
+                # Update database and cache
+                _update_aircraft_db(hex_code, final_reg, final_model, final_operator, final_callsign)
+                
+                # Cache the result
+                metadata_cache[hex_code] = {
+                    "registration": final_reg,
+                    "model": final_model,
+                    "operator": final_operator,
+                    "callsign": final_callsign,
+                    "timestamp": time.time(),
+                }
+                
+                return final_reg, final_model, final_operator, final_callsign
+    except Exception as e:
+        logger.debug(f"OpenSky states lookup failed for {hex_code}: {e}")
+
+    # Return whatever we have from database, cache it if we found something
+    if final_reg or final_model or final_operator or final_callsign:
+        metadata_cache[hex_code] = {
+            "registration": final_reg,
+            "model": final_model,
+            "operator": final_operator,
+            "callsign": final_callsign,
+            "timestamp": time.time(),
+        }
+        return final_reg, final_model, final_operator, final_callsign
 
     return "", "", "", ""
+
+# Keep legacy function name for backward compatibility
+def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
+    """Legacy function that now uses comprehensive metadata fetching."""
+    return fetch_metadata_comprehensive(hex_code)
