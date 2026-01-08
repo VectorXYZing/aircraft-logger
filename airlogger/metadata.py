@@ -32,8 +32,8 @@ def load_custom_operators() -> Dict[str, str]:
     global _cached_custom_operators, _last_operators_load
     now = time.time()
     
-    # Only reload file at most once every 60 seconds to save CPU
-    if _cached_custom_operators is not None and (now - _last_operators_load) < 60:
+    # Only reload file at most once every 5 minutes to save CPU
+    if _cached_custom_operators is not None and (now - _last_operators_load) < 300:
         return _cached_custom_operators
 
     if os.path.exists(OPERATORS_FILE):
@@ -45,9 +45,11 @@ def load_custom_operators() -> Dict[str, str]:
         except Exception:
             pass
     
-    _cached_custom_operators = {}
+    # Negative caching for missing file
+    if _cached_custom_operators is None:
+        _cached_custom_operators = {}
     _last_operators_load = now
-    return {}
+    return _cached_custom_operators
 
 
 def get_operator_from_callsign(callsign: str, country: str = "") -> str:
