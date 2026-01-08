@@ -10,7 +10,7 @@ from logging.handlers import RotatingFileHandler
 import time
 
 app = Flask(__name__)
-VERSION = "1.3.2"
+VERSION = "1.3.3"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
@@ -126,9 +126,9 @@ def load_and_filter_csv(target_date_str):
                         
                         if hex_code:
                             if hex_code not in hex_metadata:
-                                hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": ""}
+                                hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": "", "Callsign": ""}
                             
-                            for field in ["Registration", "Model", "Operator"]:
+                            for field in ["Registration", "Model", "Operator", "Callsign"]:
                                 val = get_row_val(row, field)
                                 if val:
                                     # Update if we have better data
@@ -149,7 +149,7 @@ def load_and_filter_csv(target_date_str):
         hex_code = row.get("Hex")
         if hex_code and hex_code in hex_metadata:
             meta = hex_metadata[hex_code]
-            for field in ["Registration", "Model", "Operator"]:
+            for field in ["Registration", "Model", "Operator", "Callsign"]:
                 if not row.get(field) and meta[field]:
                     row[field] = meta[field]
         
