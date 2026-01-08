@@ -24,16 +24,29 @@ OPERATORS_FILE = os.path.expanduser("~/.opensky_operators.json")
 
 # Simple in-memory cache: hex -> {registration, model, operator, callsign, timestamp}
 metadata_cache = {}
-
+_cached_custom_operators = None
+_last_operators_load = 0
 
 def load_custom_operators() -> Dict[str, str]:
-    """Load additional operators from the JSON file."""
+    """Load additional operators from the JSON file with internal caching."""
+    global _cached_custom_operators, _last_operators_load
+    now = time.time()
+    
+    # Only reload file at most once every 60 seconds to save CPU
+    if _cached_custom_operators is not None and (now - _last_operators_load) < 60:
+        return _cached_custom_operators
+
     if os.path.exists(OPERATORS_FILE):
         try:
             with open(OPERATORS_FILE, "r") as f:
-                return json.load(f)
+                _cached_custom_operators = json.load(f)
+                _last_operators_load = now
+                return _cached_custom_operators
         except Exception:
-            return {}
+            pass
+    
+    _cached_custom_operators = {}
+    _last_operators_load = now
     return {}
 
 
@@ -42,7 +55,9 @@ def get_operator_from_callsign(callsign: str, country: str = "") -> str:
     if not callsign or callsign == "N/A":
         return ""
 
-    prefix = callsign[:3].upper()
+    prefix = (callsign or "")[:3].upper()
+    if not prefix:
+        return ""
     
     # User-customized operators
     custom = load_custom_operators()
