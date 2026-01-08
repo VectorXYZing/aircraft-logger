@@ -167,17 +167,21 @@ def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
     
     # High-quality fallback chain for operator:
     # 1. API 'operator' field (e.g. Jetstar Airways)
-    # 2. API 'operatorCallsign' (often is the airline name, e.g. JETSTAR)
-    # 3. Lookup airline from callsign prefix (e.g., JST -> Jetstar)
+    # 2. Lookup airline from callsign prefix (e.g., ANZ -> Air New Zealand)
+    # 3. API 'operatorCallsign' (often is the airline name, e.g. JETSTAR)
     # 4. API 'owner' field
     # 5. 'Various [Country] operators' if we have a country
     
     final_operator = operator
-    if not final_operator:
-        final_operator = callsign # If API provides a callsign name, use it
+    # If the operator field is generic country name, treat it as empty to trigger fallbacks
+    if "Various" in final_operator and "operators" in final_operator:
+        final_operator = ""
         
     if not final_operator and callsign:
         final_operator = get_operator_from_callsign(callsign, country)
+        
+    if not final_operator:
+        final_operator = callsign # If API provides a callsign name, use it
     
     if not final_operator:
         final_operator = owner
