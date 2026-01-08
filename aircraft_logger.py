@@ -281,14 +281,15 @@ def log_aircraft(data):
         return
 
     # Fetch metadata first so changes in metadata trigger new log rows
-    reg, model, operator, _ = fetch_metadata(hex_code)
+    reg, model, operator, meta_callsign = fetch_metadata(hex_code)
 
-    # Determine callsign: prefer parsed message, ONLY fallback if we have a cached flight number
+    # Determine callsign: prefer parsed message, fallback to metadata if empty
     parsed_callsign = (data[1] or '').strip()
     
     # We never want commercial names (like JETSTAR) in the callsign column.
-    # So we strictly use the parsed one from the airwaves.
-    callsign = parsed_callsign
+    # So we prefer the real flight code from the airwaves, but fallback to metadata
+    # if the receiver didn't transmit it in this specific message.
+    callsign = parsed_callsign if parsed_callsign else meta_callsign
 
     altitude = data[2]
     speed = data[3]
