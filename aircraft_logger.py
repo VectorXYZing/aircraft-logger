@@ -214,7 +214,7 @@ def cleanup_cache():
     if current_time - last_cache_cleanup < CACHE_CLEANUP_INTERVAL:
         return
     
-logger.info(f"Cleaning cache (current size: {len(metadata.metadata_cache)})")
+    logger.info(f"Cleaning cache (current size: {len(metadata.metadata_cache)})")
     expired_keys = []
     for key, value in list(metadata.metadata_cache.items()):
         if current_time - value['timestamp'] > CACHE_TTL:
@@ -316,6 +316,36 @@ log_path = ensure_log_file()
 logger.info(f"Logging to: {log_path}")
 logger.info(f"Connecting to {HOST}:{PORT}...")
 
+def write_heartbeat(line_count):
+    """Write heartbeat file for dashboard health checks"""
+    global last_heartbeat
+    current_time = time.time()
+    try:
+        import json
+        import tempfile
+        from airlogger.config import HEARTBEAT_FILE
+
+        hb = {
+            "timestamp": current_time,
+            "iso": datetime.utcfromtimestamp(current_time).isoformat() + "Z",
+            "pid": os.getpid(),
+            "processed_since_last": line_count,
+            "cache_size": len(metadata.metadata_cache),
+        }
+        dirpath = os.path.dirname(HEARTBEAT_FILE)
+        os.makedirs(dirpath, exist_ok=True)
+        # atomic write
+        with tempfile.NamedTemporaryFile('w', delete=False, dir=dirpath, encoding='utf-8') as tmp:
+            json.dump(hb, tmp)
+            tmp.flush()
+            tmp_name = tmp.name
+        os.replace(tmp_name, HEARTBEAT_FILE)
+        last_heartbeat = current_time
+        return True
+    except Exception as e:
+        logger.debug(f"Failed to write heartbeat file: {e}")
+        return False
+
 while running:
     sock = None
     file_handle = None
@@ -326,6 +356,9 @@ while running:
         
         file_handle = sock.makefile('r', encoding='utf-8', errors='ignore')
         line_count = 0
+        
+        # Initial heartbeat on connection
+        write_heartbeat(0)
         
         for line in file_handle:
             if not running:
@@ -338,31 +371,7 @@ while running:
             if current_time - last_heartbeat >= HEARTBEAT_INTERVAL:
                 logger.info(f"Heartbeat: Still running. Processed {line_count} lines since last heartbeat")
                 logger.info(f"Memory stats - Cache: {len(metadata.metadata_cache)}, Throttle: {len(last_logged_times)}")
-                # Write heartbeat file for dashboard health checks
-                try:
-                    import json
-                    import tempfile
-                    from airlogger.config import HEARTBEAT_FILE
-
-                    hb = {
-                        "timestamp": current_time,
-                        "iso": datetime.utcfromtimestamp(current_time).isoformat() + "Z",
-                        "pid": os.getpid(),
-                        "processed_since_last": line_count,
-                        "cache_size": len(metadata.metadata_cache),
-                    }
-                    dirpath = os.path.dirname(HEARTBEAT_FILE)
-                    os.makedirs(dirpath, exist_ok=True)
-                    # atomic write
-                    with tempfile.NamedTemporaryFile('w', delete=False, dir=dirpath, encoding='utf-8') as tmp:
-                        json.dump(hb, tmp)
-                        tmp.flush()
-                        tmp_name = tmp.name
-                    os.replace(tmp_name, HEARTBEAT_FILE)
-                except Exception as e:
-                    logger.debug(f"Failed to write heartbeat file: {e}")
-
-                last_heartbeat = current_time
+                write_heartbeat(line_count)
                 line_count = 0
             
             # Periodic cleanup tasks
@@ -371,13 +380,13 @@ while running:
             cleanup_old_logs()
             
             # Process message
-            parsed = parse_message(line)
-            if parsed:
-                try:
+            try:
+                parsed = parse_message(line)
+                if parsed:
                     log_aircraft(parsed)
                     line_count += 1
-                except Exception as e:
-                    logger.error(f"Error logging aircraft data: {e}")
+            except Exception as e:
+                logger.error(f"Error processing line: {e}")
                     
     except socket.timeout:
         logger.error(f"Socket timeout after {SOCKET_TIMEOUT}s. Reconnecting...")
