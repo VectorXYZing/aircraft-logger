@@ -181,7 +181,8 @@ def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
         final_operator = get_operator_from_callsign(callsign, country)
         
     if not final_operator:
-        final_operator = callsign # If API provides a callsign name, use it
+        # Use API telephony callsign as fallback for operator NAME
+        final_operator = callsign
     
     if not final_operator:
         final_operator = owner
@@ -192,7 +193,9 @@ def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
         else:
             final_operator = f"Various {country} operators"
 
-    return reg, model, final_operator or "", callsign
+    # CRITICAL: We return the telephony name ONLY as the operator, 
+    # we DO NOT return it as the flight 'callsign'.
+    return reg, model, final_operator or "", ""
 
 
 def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
