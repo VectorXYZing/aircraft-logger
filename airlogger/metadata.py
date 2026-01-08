@@ -13,7 +13,7 @@ import requests
 logger = logging.getLogger(__name__)
 
 METADATA_URL = os.environ.get(
-    "AIRLOGGER_METADATA_URL", "https://opensky-network.org/api/metadata/aircraft/icao/{hex}"
+    "AIRLOGGER_METADATA_URL", "https://api.adsb.lol/v2/icao/{hex}"
 )
 CACHE_TTL = int(os.environ.get("AIRLOGGER_CACHE_TTL", 86400))
 MAX_RETRIES = int(os.environ.get("AIRLOGGER_MAX_RETRIES", 3))
@@ -154,40 +154,41 @@ def clear_cache() -> None:
     metadata_cache.clear()
 
 
-def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
-    reg = (data.get("registration") or data.get("reg") or "").strip()
-    model = (data.get("model") or "").strip()
-    if not model:
-        manufacturer = (data.get("manufacturerName") or "").strip()
-        if manufacturer:
-            model = manufacturer
-            
-    operator = (data.get("operator") or "").strip()
-    owner = (data.get("owner") or "").strip()
-    callsign = (data.get("operatorCallsign") or "").strip()
-    country = (data.get("country") or "").strip()
-    
-    # High-quality fallback chain for operator:
-    # 1. API 'operator' field (e.g. Jetstar Airways)
-    # 2. Lookup airline from callsign prefix (e.g., ANZ -> Air New Zealand)
-    # 3. API 'operatorCallsign' (often is the airline name, e.g. JETSTAR)
-    # 4. API 'owner' field
-    # 5. 'Various [Country] operators' if we have a country
-    
+def _parse_metadata_response(data: dict) -> Tuple[str, str, str, str]:
+    """Parse metadata from adsb.lol or OpenSky."""
+    reg = ""
+    model = ""
+    operator = ""
+    callsign = ""
+    country = ""
+
+    # Check if this is an adsb.lol response
+    if "ac" in data and isinstance(data["ac"], list) and len(data["ac"]) > 0:
+        ac = data["ac"][0]
+        reg = (ac.get("r") or "").strip()
+        model = (ac.get("t") or "").strip()
+        callsign = (ac.get("flight") or "").strip()
+    else:
+        # Fallback to OpenSky format
+        reg = (data.get("registration") or data.get("reg") or "").strip()
+        model = (data.get("model") or "").strip()
+        if not model:
+            manufacturer = (data.get("manufacturerName") or "").strip()
+            if manufacturer:
+                model = manufacturer
+        operator = (data.get("operator") or "").strip()
+        callsign = (data.get("operatorCallsign") or "").strip()
+        country = (data.get("country") or "").strip()
+        if not operator:
+             operator = (data.get("owner") or "").strip()
+
+    # Derived operator lookup
     final_operator = operator
-    # If the operator field is generic country name, treat it as empty to trigger fallbacks
     if "Various" in final_operator and "operators" in final_operator:
         final_operator = ""
         
     if not final_operator and callsign:
         final_operator = get_operator_from_callsign(callsign, country)
-        
-    if not final_operator:
-        # Use API telephony callsign as fallback for operator NAME
-        final_operator = callsign
-    
-    if not final_operator:
-        final_operator = owner
         
     if not final_operator and country:
         if country == "Australia":
@@ -195,9 +196,7 @@ def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
         else:
             final_operator = f"Various {country} operators"
 
-    # CRITICAL: We return the telephony name ONLY as the operator, 
-    # we DO NOT return it as the flight 'callsign'.
-    return reg, model, final_operator or "", ""
+    return reg, model, final_operator or "", callsign
 
 
 def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
@@ -240,8 +239,8 @@ def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
                         data = None
 
                 if data and isinstance(data, dict):
-                    reg, model, operator, callsign = _parse_opensky(data)
-                    if reg or model or operator or callsign:
+                    reg, model, operator, meta_callsign = _parse_metadata_response(data)
+                    if reg or model or operator or meta_callsign:
                         metadata_cache[hex_code] = {
                             "registration": reg,
                             "model": model,
