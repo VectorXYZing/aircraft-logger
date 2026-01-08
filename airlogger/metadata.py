@@ -4,8 +4,9 @@ Includes retries/backoff and an in-memory cache with TTL.
 """
 import os
 import time
+import json
 import logging
-from typing import Tuple
+from typing import Tuple, Dict
 
 import requests
 
@@ -18,8 +19,99 @@ CACHE_TTL = int(os.environ.get("AIRLOGGER_CACHE_TTL", 86400))
 MAX_RETRIES = int(os.environ.get("AIRLOGGER_MAX_RETRIES", 3))
 BACKOFF_BASE = float(os.environ.get("AIRLOGGER_BACKOFF_BASE", 0.5))
 
+# File to store discovered operators
+OPERATORS_FILE = os.path.expanduser("~/.opensky_operators.json")
+
 # Simple in-memory cache: hex -> {registration, model, operator, callsign, timestamp}
 metadata_cache = {}
+
+
+def load_custom_operators() -> Dict[str, str]:
+    """Load additional operators from the JSON file."""
+    if os.path.exists(OPERATORS_FILE):
+        try:
+            with open(OPERATORS_FILE, "r") as f:
+                return json.load(f)
+        except Exception:
+            return {}
+    return {}
+
+
+def get_operator_from_callsign(callsign: str, country: str = "") -> str:
+    """Determine operator from callsign prefix."""
+    if not callsign or callsign == "N/A":
+        return ""
+
+    prefix = callsign[:3].upper()
+    
+    # User-customized operators
+    custom = load_custom_operators()
+    if prefix in custom:
+        return custom[prefix]
+
+    # Predefined common airline prefixes
+    airline_prefixes = {
+        "BAW": "British Airways",
+        "SHT": "British Airways",
+        "EZY": "easyJet",
+        "BEE": "Flybe",
+        "RYR": "Ryanair",
+        "STN": "Ryanair",
+        "WZZ": "Wizz Air",
+        "DLH": "Lufthansa",
+        "GWI": "Germanwings",
+        "AFR": "Air France",
+        "KLM": "KLM",
+        "DLX": "Delta",
+        "AAL": "American Airlines",
+        "UAL": "United",
+        "SWA": "Southwest",
+        "JBU": "JetBlue",
+        "QFA": "Qantas",
+        "ANZ": "Air New Zealand",
+        "VA": "Virgin Australia",
+        "VOZ": "Virgin Australia",
+        "VIR": "Virgin Atlantic",
+        "UAE": "Emirates",
+        "QTR": "Qatar Airways",
+        "ETD": "Etihad",
+        "SIA": "Singapore Airlines",
+        "HKG": "Hong Kong Airlines",
+        "CPA": "Cathay Pacific",
+        "JAL": "Japan Airlines",
+        "ANA": "All Nippon Airways",
+        "KAL": "Korean Air",
+        "TAM": "LATAM",
+        "LAN": "LATAM",
+        "GLO": "Gol",
+        "AZA": "ITA Airways",
+        "IBE": "Iberia",
+        "JST": "Jetstar",
+        "AVA": "Avianca",
+        "TUI": "TUI Airways",
+        "SAS": "Scandinavian Airlines",
+        "FIN": "Finnair",
+        "AAR": "Asiana",
+        "CSN": "China Southern",
+        "CCA": "Air China",
+        "CES": "China Eastern",
+        "HYA": "Hainan Airlines",
+        "FDX": "FedEx",
+        "UPS": "UPS",
+        "TNT": "FedEx",
+        "CLX": "Cargolux",
+        "GTI": "Atlas Air",
+        "CAL": "China Airlines",
+        "EVA": "EVA Air",
+        "RYK": "Ryanair",
+        "EXS": "Jet2",
+        "VLG": "Vueling",
+    }
+    
+    if prefix in airline_prefixes:
+        return airline_prefixes[prefix]
+        
+    return ""
 
 
 def clear_cache() -> None:
@@ -28,20 +120,38 @@ def clear_cache() -> None:
 
 
 def _parse_opensky(data: dict) -> Tuple[str, str, str, str]:
-    reg = data.get("registration") or data.get("reg") or ""
-    model = data.get("model") or ""
+    reg = (data.get("registration") or data.get("reg") or "").strip()
+    model = (data.get("model") or "").strip()
     if not model:
-        manufacturer = data.get("manufacturerName") or ""
+        manufacturer = (data.get("manufacturerName") or "").strip()
         if manufacturer:
             model = manufacturer
+            
     operator = (data.get("operator") or "").strip()
     owner = (data.get("owner") or "").strip()
-    
-    # Use owner as fallback if operator is missing
-    final_operator = operator if operator else owner
-    
     callsign = (data.get("operatorCallsign") or "").strip()
-    return reg or "", model or "", final_operator or "", callsign or ""
+    country = (data.get("country") or "").strip()
+    
+    # High-quality fallback chain for operator:
+    # 1. API 'operator' field
+    # 2. Lookup airline from callsign prefix (e.g., JST -> Jetstar)
+    # 3. API 'owner' field
+    # 4. 'Various [Country] operators' if we have a country
+    
+    final_operator = operator
+    if not final_operator and callsign:
+        final_operator = get_operator_from_callsign(callsign, country)
+    
+    if not final_operator:
+        final_operator = owner
+        
+    if not final_operator and country:
+        if country == "Australia":
+            final_operator = "Various Australian operators"
+        else:
+            final_operator = f"Various {country} operators"
+
+    return reg, model, final_operator or "", callsign
 
 
 def fetch_metadata(hex_code: str) -> Tuple[str, str, str, str]:
