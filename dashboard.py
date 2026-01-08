@@ -10,7 +10,7 @@ from logging.handlers import RotatingFileHandler
 import time
 
 app = Flask(__name__)
-VERSION = "1.2.0"
+VERSION = "1.2.1"
 
 # Logging setup
 LOGGING_DIR = os.path.expanduser('~/aircraft-logger/logs')
