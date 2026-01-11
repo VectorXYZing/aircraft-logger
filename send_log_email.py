@@ -316,6 +316,7 @@ def send_email():
     # Generate PDF report
     pdf_filename = f"aircraft_report_{TODAY}.pdf"
     pdf_path = os.path.join(LOG_DIR, pdf_filename)
+    pdf_created = False
     
     if generate_pdf_report(aircraft_data, pdf_path):
         try:
@@ -323,15 +324,12 @@ def send_email():
                 part = MIMEApplication(f.read(), Name=pdf_filename)
             part["Content-Disposition"] = f'attachment; filename="{pdf_filename}"'
             msg.attach(part)
-            
-            # Clean up temporary PDF file
-            os.remove(pdf_path)
+            pdf_created = True
+            logger.info(f"PDF report attached to email: {pdf_filename}")
         except Exception as e:
             logger.error(f"Failed to attach PDF report: {e}")
-            return
     else:
         logger.error("Failed to generate PDF report")
-        return
 
     # Send with retries (handle STARTTLS or SSL)
     import smtplib as _smtplib
@@ -339,6 +337,7 @@ def send_email():
 
     attempts = 0
     max_attempts = 3
+    email_sent = False
     try:
         while attempts < max_attempts:
             try:
@@ -353,6 +352,7 @@ def send_email():
                 server.send_message(msg)
                 server.quit()
                 logger.info("✅ Email sent successfully.")
+                email_sent = True
                 break
             except _smtplib.SMTPException as e:
                 attempts += 1
@@ -364,6 +364,18 @@ def send_email():
                     break
     except Exception as e:
         logger.error(f"Unexpected error during email sending: {e}")
+    
+    # Always clean up PDF file regardless of success/failure
+    if pdf_created:
+        try:
+            if os.path.exists(pdf_path):
+                os.remove(pdf_path)
+                logger.info("🗑️ PDF file cleaned up successfully")
+        except Exception as e:
+            logger.warning(f"Failed to clean up PDF file {pdf_path}: {e}")
+    
+    if not email_sent:
+        logger.error("Email sending failed - check logs for details")
 
 if __name__ == "__main__":
     send_email()
