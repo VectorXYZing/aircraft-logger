@@ -1,0 +1,32 @@
+# Test Email Commands for Raspberry Pi
+
+## Send Test Email with Today's Log
+```bash
+cd /home/ps/aircraft-logger  # or your actual path
+source venv/bin/activate
+python3 send_log_email.py
+```
+
+## Send Test Email with Specific Date
+```bash
+cd /home/ps/aircraft-logger  # or your actual path  
+source venv/bin/activate
+python3 send_log_email.py 2025-01-11
+```
+
+## What Happens:
+1. ✅ Reads the aircraft log CSV file for the specified date
+2. ✅ Consolidates aircraft data (one line per aircraft)
+3. ✅ Generates formatted PDF report with:
+   - Summary statistics
+   - Aircraft table with max altitude, speed, etc.
+   - Professional formatting
+4. ✅ Sends email with PDF attachment
+
+## Log File Location:
+- Default: `~/aircraft-logger/logs/aircraft_log_YYYY-MM-DD.csv`
+- The script automatically finds the log file for the specified date
+
+## Email Configuration:
+- Make sure your `.env` file has SMTP settings configured
+- Email will be sent to the address specified in `EMAIL_TO`
