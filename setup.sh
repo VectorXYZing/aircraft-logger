@@ -99,9 +99,9 @@ sudo systemctl enable aircraft-dashboard.service
 sudo systemctl restart aircraft-logger.service
 sudo systemctl restart aircraft-dashboard.service
 
-# Set up daily cron job for emailing logs
-echo "📅 Setting up cron job for daily email report..."
-(crontab -l 2>/dev/null | grep -v send_log_email.py ; echo "0 19 * * * /home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/send_log_email.py") | crontab -
+# Set up daily cron job for emailing logs at 2 AM
+echo "📅 Setting up cron job for daily email report at 2 AM..."
+(crontab -l 2>/dev/null | grep -v send_log_email.py ; echo "0 2 * * * /home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/send_log_email.py") | crontab -
 
 # Verify services are running
 echo "🔍 Verifying services..."
@@ -115,3 +115,4 @@ echo "📝 Next steps:"
 echo "1. Edit the .env file with your email settings"
 echo "2. Access the dashboard at http://<your-raspberry-pi-ip>:5000"
 echo "3. Check the logs with: journalctl -u aircraft-logger -f"
+echo "4. Email reports will now be sent daily at 2:00 AM UTC with formatted PDF attachments"

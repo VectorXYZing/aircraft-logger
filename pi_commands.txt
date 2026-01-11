@@ -1,0 +1,21 @@
+# Commands to run on your Raspberry Pi:
+
+# Step 1: Update code
+git pull
+
+# Step 2: Install PDF library
+source venv/bin/activate
+pip install reportlab==4.0.8
+
+# Step 3: Update cron schedule
+crontab -e
+# Change: 0 19 * * * to: 0 2 * * *
+# Or use this one-liner:
+(crontab -l 2>/dev/null | grep -v send_log_email.py ; echo "0 2 * * * /home/ps/aircraft-logger/venv/bin/python /home/ps/aircraft-logger/send_log_email.py") | crontab -
+
+# Step 4: Test the new functionality
+python3 send_log_email.py
+
+# Alternative: Use the automated script
+chmod +x update_pi.sh
+./update_pi.sh
