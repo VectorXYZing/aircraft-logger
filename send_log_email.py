@@ -130,18 +130,6 @@ def consolidate_aircraft_data():
         data['registrations'] = list(data['registrations'])
         data['operators'] = list(data['operators'])
         data['models'] = list(data['models'])
-        
-        # Calculate most recent position
-        if data['positions']:
-            data['positions'].sort(key=lambda x: x[2] if x[2] else '')  # Sort by timestamp
-            data['last_lat'] = data['positions'][-1][0]
-            data['last_lon'] = data['positions'][-1][1]
-        else:
-            data['last_lat'] = 0
-            data['last_lon'] = 0
-        
-        # Remove positions list to clean up data
-        del data['positions']
     
     return aircraft_data
 
@@ -206,7 +194,7 @@ def generate_pdf_report(aircraft_data, output_path):
         story.append(Spacer(1, 20))
         
         # Table data
-        table_data = [['Hex Code', 'Registration', 'Callsign', 'Operator', 'Model', 'Max Alt (ft)', 'Max Speed (kt)', 'Last Position']]
+        table_data = [['Hex Code', 'Registration', 'Callsign', 'Operator', 'Model', 'Max Alt (ft)', 'Max Speed (kt)', 'Time Logged']]
         
         # Sort aircraft by hex code
         sorted_aircraft = sorted(aircraft_data.items(), key=lambda x: x[0])
@@ -220,9 +208,9 @@ def generate_pdf_report(aircraft_data, output_path):
             altitude_str = f"{data['max_altitude']:.0f}" if data['max_altitude'] > 0 else "N/A"
             speed_str = f"{data['max_speed']:.0f}" if data['max_speed'] > 0 else "N/A"
             
-            position_str = f"{data['last_lat']:.4f}, {data['last_lon']:.4f}" if data['last_lat'] != 0 else "N/A"
+            time_logged = data['last_seen'] if data['last_seen'] else 'N/A'
             
-            row = [hex_code, registration, callsign, operator, model, altitude_str, speed_str, position_str]
+            row = [hex_code, registration, callsign, operator, model, altitude_str, speed_str, time_logged]
             table_data.append(row)
         
         # Create table
