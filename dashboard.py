@@ -3,7 +3,7 @@ import os
 import csv
 import gzip
 from collections import Counter
-from datetime import datetime, date
+from datetime import datetime, date, time as dt_time, timedelta
 import pytz
 import logging
 from logging.handlers import RotatingFileHandler
@@ -85,11 +85,36 @@ def load_and_filter_csv(target_date_str):
         logger.error(f"Invalid date format: {target_date_str} - {e}")
         return [], 0, 0, [], []
 
-    # Only load files for the target date (faster than scanning everything)
-    candidates = [
-        os.path.join(LOG_DIR, f"aircraft_log_{target_date}.csv"),
-        os.path.join(LOG_DIR, f"aircraft_log_{target_date}.csv.gz"),
-    ]
+    def localize_datetime(naive_dt):
+        if LOCAL_TZ and hasattr(LOCAL_TZ, "localize"):
+            return LOCAL_TZ.localize(naive_dt)
+        if LOCAL_TZ:
+            return naive_dt.replace(tzinfo=LOCAL_TZ)
+        return naive_dt
+
+    # Determine which UTC log files could contain rows for the selected local date
+    utc_dates = {target_date}
+    if LOCAL_TZ:
+        try:
+            start_local = localize_datetime(datetime.combine(target_date, dt_time.min))
+            end_local = localize_datetime(datetime.combine(target_date, dt_time.max))
+            utc_tz = ZoneInfo("UTC") if HAS_ZONEINFO else pytz.utc
+            start_utc = start_local.astimezone(utc_tz)
+            end_utc = end_local.astimezone(utc_tz)
+            utc_dates = set()
+            current_date = start_utc.date()
+            while current_date <= end_utc.date():
+                utc_dates.add(current_date)
+                current_date += timedelta(days=1)
+        except Exception as e:
+            logger.debug(f"Failed to compute UTC date range for {target_date}: {e}")
+            utc_dates = {target_date}
+
+    # Only load files for the relevant UTC dates (faster than scanning everything)
+    candidates = []
+    for utc_date in sorted(utc_dates):
+        candidates.append(os.path.join(LOG_DIR, f"aircraft_log_{utc_date}.csv"))
+        candidates.append(os.path.join(LOG_DIR, f"aircraft_log_{utc_date}.csv.gz"))
 
     try:
         for filepath in candidates:
