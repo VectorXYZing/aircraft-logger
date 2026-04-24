@@ -287,15 +287,21 @@
                     <p class="lead opacity-75 mb-0">Dashboard v{{ version }}</p>
                 </div>
 
-                <!-- Date Selector -->
-                <div class="card p-3 mb-5 mx-auto shadow-sm" style="max-width: 400px; border-radius: 3rem;">
-                    <form method="get" class="d-flex justify-content-between align-items-center gap-3 m-0">
-                        <input type="date" name="date" class="form-control border-0 bg-transparent shadow-none"
-                               value="{{ selected_date }}" max="{{ max_date }}" style="font-size: 1.1rem; font-weight: 500;">
-                        <button type="submit" class="btn btn-primary rounded-pill px-4">
-                            <i class="bi bi-search me-1"></i> View
+                <!-- Date Selector and Live View -->
+                <div class="card p-3 mb-5 mx-auto shadow-sm" style="max-width: 550px; border-radius: 3rem;">
+                    <div class="d-flex justify-content-between align-items-center gap-3 m-0">
+                        <form method="get" class="d-flex align-items-center gap-2 flex-grow-1 m-0">
+                            <input type="date" name="date" class="form-control border-0 bg-transparent shadow-none"
+                                   value="{{ selected_date }}" max="{{ max_date }}" style="font-size: 1.1rem; font-weight: 500;">
+                            <button type="submit" class="btn btn-primary rounded-pill px-4">
+                                <i class="bi bi-search me-1"></i> View
+                            </button>
+                        </form>
+                        <div class="vr mx-2 text-muted"></div>
+                        <button type="button" id="liveViewToggle" class="btn btn-outline-danger rounded-pill px-4 fw-bold">
+                            <i class="bi bi-record-circle me-1"></i> Live
                         </button>
-                    </form>
+                    </div>
                 </div>
 
                 {% if summary %}
@@ -615,7 +621,7 @@
             maxZoom: 19
         }).addTo(window.flightMap);
 
-        const aircraftData = [
+        const initialAircraftData = [
             {% for row in data %}
             {
                 time: "{{ row['Time Local'] }}",
@@ -631,66 +637,120 @@
             {% endfor %}
         ];
 
-        const bounds = [];
-        const markers = L.markerClusterGroup ? L.markerClusterGroup() : null; // Optional: can add marker clustering later
-        
-        const flightsByHex = {};
-        
-        aircraftData.forEach(ac => {
-            if (!isNaN(ac.lat) && !isNaN(ac.lon) && ac.lat !== 0 && ac.lon !== 0) {
-                if (!flightsByHex[ac.hex]) {
-                    flightsByHex[ac.hex] = [];
+        let mapLayers = [];
+
+        function updateMap(aircraftData) {
+            // Clear existing layers
+            mapLayers.forEach(layer => window.flightMap.removeLayer(layer));
+            mapLayers = [];
+            
+            const bounds = [];
+            const flightsByHex = {};
+            
+            aircraftData.forEach(ac => {
+                let lat = parseFloat(ac.lat || ac.Latitude);
+                let lon = parseFloat(ac.lon || ac.Longitude);
+                if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
+                    ac.lat = lat;
+                    ac.lon = lon;
+                    if (!flightsByHex[ac.hex]) {
+                        flightsByHex[ac.hex] = [];
+                    }
+                    flightsByHex[ac.hex].push(ac);
+                    bounds.push([ac.lat, ac.lon]);
                 }
-                flightsByHex[ac.hex].push(ac);
-                bounds.push([ac.lat, ac.lon]);
+            });
+
+            // Vibrant colors for different flight paths
+            const colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
+
+            Object.keys(flightsByHex).forEach((hex, index) => {
+                const flightPath = flightsByHex[hex];
+                const latlngs = flightPath.map(ac => [ac.lat, ac.lon]);
+                const color = colors[index % colors.length];
+                
+                // 1. Draw the line connecting the path
+                const polyline = L.polyline(latlngs, {
+                    color: color,
+                    weight: 2,
+                    opacity: 0.6,
+                    smoothFactor: 1
+                }).addTo(window.flightMap);
+                mapLayers.push(polyline);
+
+                // 2. Draw small dots at each coordinate
+                flightPath.forEach((ac, i) => {
+                    const isLatest = (i === 0);
+                    const marker = L.circleMarker([ac.lat, ac.lon], {
+                        radius: isLatest ? 5 : 3,
+                        fillColor: color,
+                        color: isLatest ? "#fff" : "transparent",
+                        weight: isLatest ? 2 : 0,
+                        opacity: 1,
+                        fillOpacity: 0.8
+                    }).addTo(window.flightMap);
+                    
+                    let timeStr = ac.time || ac["Time Local"] || "";
+                    if (timeStr.includes(' ')) timeStr = timeStr.split(' ')[1];
+
+                    let popupText = `<div style="font-family:'Outfit',sans-serif;">
+                                        <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong><br>`;
+                    if (ac.callsign) popupText += `<b>Callsign:</b> ${ac.callsign}<br>`;
+                    if (ac.reg) popupText += `<b>Reg:</b> ${ac.reg}<br>`;
+                    if (ac.model) popupText += `<b>Model:</b> ${ac.model}<br>`;
+                    if (ac.alt) popupText += `<b>Altitude:</b> ${ac.alt} ft<br>`;
+                    if (ac.speed) popupText += `<b>Speed:</b> ${ac.speed} kts<br>`;
+                    if (timeStr) popupText += `<b>Time:</b> ${timeStr}`;
+                    popupText += `</div>`;
+                    
+                    marker.bindPopup(popupText);
+                    mapLayers.push(marker);
+                });
+            });
+
+            if (bounds.length > 0) {
+                window.flightMap.fitBounds(bounds, { padding: [30, 30] });
+            }
+        }
+
+        // Initialize with server-rendered data
+        updateMap(initialAircraftData);
+
+        // --- Live View Logic ---
+        let liveInterval = null;
+        const liveBtn = document.getElementById('liveViewToggle');
+        
+        liveBtn.addEventListener('click', function() {
+            if (liveInterval) {
+                // Stop Live View
+                clearInterval(liveInterval);
+                liveInterval = null;
+                liveBtn.classList.remove('btn-danger');
+                liveBtn.classList.add('btn-outline-danger');
+                liveBtn.innerHTML = '<i class="bi bi-record-circle me-1"></i> Live';
+                updateMap(initialAircraftData);
+            } else {
+                // Start Live View
+                liveBtn.classList.remove('btn-outline-danger');
+                liveBtn.classList.add('btn-danger');
+                liveBtn.innerHTML = '<i class="bi bi-broadcast me-1 pulse-icon"></i> Live Active';
+                
+                fetchLiveFlights();
+                liveInterval = setInterval(fetchLiveFlights, 15000);
             }
         });
 
-        // Vibrant colors for different flight paths
-        const colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
-
-        Object.keys(flightsByHex).forEach((hex, index) => {
-            const flightPath = flightsByHex[hex];
-            const latlngs = flightPath.map(ac => [ac.lat, ac.lon]);
-            const color = colors[index % colors.length];
-            
-            // 1. Draw the line connecting the path
-            L.polyline(latlngs, {
-                color: color,
-                weight: 2,
-                opacity: 0.6,
-                smoothFactor: 1
-            }).addTo(window.flightMap);
-
-            // 2. Draw small dots at each coordinate
-            flightPath.forEach((ac, i) => {
-                // Make the most recent position slightly larger
-                const isLatest = (i === 0);
-                const marker = L.circleMarker([ac.lat, ac.lon], {
-                    radius: isLatest ? 5 : 3,
-                    fillColor: color,
-                    color: isLatest ? "#fff" : "transparent",
-                    weight: isLatest ? 2 : 0,
-                    opacity: 1,
-                    fillOpacity: 0.8
-                }).addTo(window.flightMap);
-
-                let popupText = `<div style="font-family:'Outfit',sans-serif;">
-                                    <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong><br>`;
-                if (ac.callsign) popupText += `<b>Callsign:</b> ${ac.callsign}<br>`;
-                if (ac.reg) popupText += `<b>Reg:</b> ${ac.reg}<br>`;
-                if (ac.model) popupText += `<b>Model:</b> ${ac.model}<br>`;
-                if (ac.alt) popupText += `<b>Altitude:</b> ${ac.alt} ft<br>`;
-                if (ac.speed) popupText += `<b>Speed:</b> ${ac.speed} kts<br>`;
-                if (ac.time) popupText += `<b>Time:</b> ${ac.time.split(' ')[1]}`;
-                popupText += `</div>`;
-                
-                marker.bindPopup(popupText);
-            });
-        });
-
-        if (bounds.length > 0) {
-            window.flightMap.fitBounds(bounds, { padding: [30, 30] });
+        function fetchLiveFlights() {
+            fetch('/api/live_flights')
+                .then(response => response.json())
+                .then(data => {
+                    if (data && !data.error) {
+                        updateMap(data);
+                    } else {
+                        console.error("Error fetching live flights:", data.error);
+                    }
+                })
+                .catch(error => console.error("Failed to fetch live flights:", error));
         }
 
 

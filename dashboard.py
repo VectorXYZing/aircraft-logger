@@ -240,6 +240,75 @@ def index():
         return f"<h1>Dashboard Error</h1><p>{str(e)}</p><p>Check dashboard.log for details.</p>", 500
 
 
+@app.route('/api/live_flights')
+def api_live_flights():
+    """Return JSON data for flights seen in the last 15 minutes."""
+    try:
+        from airlogger.db import get_db_connection
+        from flask import jsonify
+        
+        aircraft_data = []
+        hex_metadata = {}
+
+        # 15 minutes ago in UTC
+        utc_now = datetime.utcnow()
+        time_threshold = (utc_now - timedelta(minutes=15)).strftime("%Y-%m-%d %H:%M:%S")
+
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            query = "SELECT * FROM flights WHERE timestamp_utc >= ?"
+            cursor.execute(query, (time_threshold,))
+            
+            for row in cursor.fetchall():
+                time_utc = row['timestamp_utc']
+                local_time = convert_to_local(time_utc)
+                if not local_time:
+                    continue
+                
+                row_dict = {
+                    "Time Local": local_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "Hex": row['hex'].upper() if row['hex'] else "",
+                    "Callsign": row['callsign'] or "",
+                    "Altitude": row['altitude'] or "",
+                    "Speed": row['speed'] or "",
+                    "Latitude": row['lat'] or "",
+                    "Longitude": row['lon'] or "",
+                    "Registration": row['registration'] or "",
+                    "Model": row['model'] or "",
+                    "Operator": row['operator'] or ""
+                }
+                
+                hex_code = row_dict["Hex"]
+                if hex_code:
+                    if hex_code not in hex_metadata:
+                        hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": "", "Callsign": ""}
+                    
+                    for field in ["Registration", "Model", "Operator", "Callsign"]:
+                        val = row_dict[field]
+                        if val:
+                            if not hex_metadata[hex_code][field] or len(val) > len(hex_metadata[hex_code][field]):
+                                hex_metadata[hex_code][field] = val
+                
+                aircraft_data.append(row_dict)
+
+        # Second pass: Apply best-known metadata to every row
+        for row in aircraft_data:
+            hex_code = row.get("Hex")
+            if hex_code and hex_code in hex_metadata:
+                meta = hex_metadata[hex_code]
+                for field in ["Registration", "Model", "Operator", "Callsign"]:
+                    if not row.get(field) and meta[field]:
+                        row[field] = meta[field]
+                        
+        aircraft_data.sort(key=lambda x: x.get("Time Local", ""), reverse=True)
+        return jsonify(aircraft_data)
+        
+    except Exception as e:
+        logger.error(f"Error fetching live flights: {e}")
+        from flask import jsonify
+        return jsonify({"error": str(e)}), 500
+
+
 @app.route('/status')
 def status():
     """Return a compact JSON status with totals and the most recent record."""
