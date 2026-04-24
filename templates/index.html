@@ -647,12 +647,21 @@
             const bounds = [];
             const flightsByHex = {};
             
-            aircraftData.forEach(ac => {
-                let lat = parseFloat(ac.lat || ac.Latitude);
-                let lon = parseFloat(ac.lon || ac.Longitude);
-                if (!isNaN(lat) && !isNaN(lon) && lat !== 0 && lon !== 0) {
-                    ac.lat = lat;
-                    ac.lon = lon;
+            // Normalize data keys (API returns capitalized keys)
+            const normalizedData = aircraftData.map(ac => ({
+                hex: ac.hex || ac.Hex || "UNKNOWN",
+                callsign: ac.callsign || ac.Callsign || "",
+                reg: ac.reg || ac.Registration || "",
+                model: ac.model || ac.Model || "",
+                alt: parseFloat(ac.alt || ac.Altitude),
+                speed: parseFloat(ac.speed || ac.Speed),
+                lat: parseFloat(ac.lat || ac.Latitude),
+                lon: parseFloat(ac.lon || ac.Longitude),
+                time: ac.time || ac["Time Local"] || ""
+            }));
+            
+            normalizedData.forEach(ac => {
+                if (!isNaN(ac.lat) && !isNaN(ac.lon) && ac.lat !== 0 && ac.lon !== 0) {
                     if (!flightsByHex[ac.hex]) {
                         flightsByHex[ac.hex] = [];
                     }
