@@ -354,13 +354,26 @@
                     </div>
                 </div>
 
-                <!-- Map Section -->
-                <div class="row mb-5">
-                    <div class="col-12">
+                <!-- Map and Live List Section -->
+                <div class="row g-4 mb-5" id="mapSection">
+                    <div class="col-lg-8">
                         <div class="card h-100">
                             <div class="card-body p-4">
                                 <h4 class="card-title fw-bold mb-4">🗺️ Flight Paths</h4>
                                 <div id="flightMap"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-4">
+                        <div class="card h-100">
+                            <div class="card-body p-4 d-flex flex-column">
+                                <h4 class="card-title fw-bold mb-4">📡 Live Aircraft</h4>
+                                <div id="liveAircraftList" class="flex-grow-1 overflow-auto pe-2" style="max-height: 500px;">
+                                    <div class="text-muted text-center mt-5">
+                                        <i class="bi bi-info-circle mb-2 d-block fs-3"></i>
+                                        Enable 'Live' mode to see active flights.
+                                    </div>
+                                </div>
                             </div>
                         </div>
                     </div>
@@ -639,7 +652,7 @@
 
         let mapLayers = [];
 
-        function updateMap(aircraftData) {
+        function updateMap(aircraftData, isLive = false) {
             // Clear existing layers
             mapLayers.forEach(layer => window.flightMap.removeLayer(layer));
             mapLayers = [];
@@ -720,10 +733,76 @@
             if (bounds.length > 0) {
                 window.flightMap.fitBounds(bounds, { padding: [30, 30] });
             }
+
+            if (isLive) {
+                updateLiveList(flightsByHex, colors);
+            } else {
+                const listContainer = document.getElementById('liveAircraftList');
+                if (listContainer) {
+                    listContainer.innerHTML = `
+                        <div class="text-muted text-center mt-5">
+                            <i class="bi bi-info-circle mb-2 d-block fs-3"></i>
+                            Enable 'Live' mode to see active flights.
+                        </div>
+                    `;
+                }
+            }
+        }
+
+        function updateLiveList(flightsByHex, colors) {
+            const listContainer = document.getElementById('liveAircraftList');
+            if (!listContainer) return;
+            
+            const hexes = Object.keys(flightsByHex);
+            if (hexes.length === 0) {
+                listContainer.innerHTML = `
+                    <div class="text-muted text-center mt-5">
+                        <i class="bi bi-info-circle mb-2 d-block fs-3"></i>
+                        No active flights currently tracked.
+                    </div>
+                `;
+                return;
+            }
+
+            let html = '<div class="list-group list-group-flush">';
+            hexes.forEach((hex, index) => {
+                const flightPath = flightsByHex[hex];
+                const latest = flightPath[0]; // newest ping
+                const color = colors[index % colors.length];
+                
+                let callsignStr = latest.callsign ? `<span class="badge bg-secondary text-white">${latest.callsign}</span>` : '';
+                let speedAlt = "";
+                if (latest.speed && latest.alt) {
+                    speedAlt = `<small class="text-muted">${latest.speed} kts | ${latest.alt} ft</small>`;
+                }
+                
+                let timeStr = latest.time || "";
+                if (timeStr.includes(' ')) timeStr = timeStr.split(' ')[1];
+                
+                html += `
+                <div class="list-group-item bg-transparent px-0 border-bottom border-secondary border-opacity-25 py-3">
+                    <div class="d-flex w-100 justify-content-between align-items-center mb-1">
+                        <div class="d-flex align-items-center">
+                            <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${color}; margin-right:10px;"></span>
+                            <h6 class="mb-0 fw-bold" style="color:var(--bs-body-color)">${latest.hex}</h6>
+                        </div>
+                        ${callsignStr}
+                    </div>
+                    <div class="d-flex justify-content-between ms-4">
+                        <small class="text-muted text-truncate pe-2" style="max-width: 130px;" title="${latest.model || latest.reg}">${latest.model || latest.reg || 'Unknown Type'}</small>
+                        ${speedAlt}
+                    </div>
+                    <div class="text-end mt-1">
+                        <small class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-clock me-1"></i>${timeStr}</small>
+                    </div>
+                </div>`;
+            });
+            html += '</div>';
+            listContainer.innerHTML = html;
         }
 
         // Initialize with server-rendered data
-        updateMap(initialAircraftData);
+        updateMap(initialAircraftData, false);
 
         // --- Live View Logic ---
         let liveInterval = null;
@@ -737,7 +816,7 @@
                 liveBtn.classList.remove('btn-danger');
                 liveBtn.classList.add('btn-outline-danger');
                 liveBtn.innerHTML = '<i class="bi bi-record-circle me-1"></i> Live';
-                updateMap(initialAircraftData);
+                updateMap(initialAircraftData, false);
             } else {
                 // Start Live View
                 liveBtn.classList.remove('btn-outline-danger');
@@ -745,7 +824,7 @@
                 liveBtn.innerHTML = '<i class="bi bi-broadcast me-1 pulse-icon"></i> Live Active';
                 
                 fetchLiveFlights();
-                liveInterval = setInterval(fetchLiveFlights, 15000);
+                liveInterval = setInterval(fetchLiveFlights, 5000);
             }
         });
 
@@ -754,7 +833,7 @@
                 .then(response => response.json())
                 .then(data => {
                     if (data && !data.error) {
-                        updateMap(data);
+                        updateMap(data, true);
                     } else {
                         console.error("Error fetching live flights:", data.error);
                     }
