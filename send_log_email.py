@@ -66,26 +66,32 @@ def consolidate_aircraft_data():
     })
     
     try:
-        with open(LOG_FILE, "r", encoding="utf-8") as f:
-            reader = csv.DictReader(f)
-            for row in reader:
-                hex_code = row.get('Hex', '').strip()
+        import sys
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        from airlogger.db import get_db_connection
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            cursor.execute("SELECT * FROM flights WHERE date(timestamp_utc) = ?", (TODAY,))
+            
+            for row in cursor.fetchall():
+                hex_code = (row['hex'] or '').upper()
                 if not hex_code:
                     continue
                 
                 # Parse numeric fields
                 try:
-                    altitude = float(row.get('Altitude', 0) or 0)
-                    speed = float(row.get('Speed', 0) or 0)
+                    altitude = float(row['altitude'] or 0)
+                    speed = float(row['speed'] or 0)
                 except (ValueError, TypeError):
                     altitude = 0
                     speed = 0
                 
-                timestamp = row.get('Time UTC', '')
-                callsign = row.get('Callsign', '').strip()
-                registration = row.get('Registration', '').strip()
-                operator = row.get('Operator', '').strip()
-                model = row.get('Model', '').strip()
+                timestamp = row['timestamp_utc']
+                callsign = (row['callsign'] or '').strip()
+                registration = (row['registration'] or '').strip()
+                operator = (row['operator'] or '').strip()
+                model = (row['model'] or '').strip()
                 
                 # Update consolidated data
                 data = aircraft_data[hex_code]
@@ -113,15 +119,15 @@ def consolidate_aircraft_data():
                 
                 # Track positions (lat, lon)
                 try:
-                    lat = float(row.get('Latitude', 0) or 0)
-                    lon = float(row.get('Longitude', 0) or 0)
+                    lat = float(row['lat'] or 0)
+                    lon = float(row['lon'] or 0)
                     if lat != 0 and lon != 0:
                         data['positions'].append((lat, lon, timestamp))
                 except (ValueError, TypeError):
                     pass
     
     except Exception as e:
-        logger.error(f"Failed to read or parse log file {LOG_FILE}: {e}")
+        logger.error(f"Failed to read from database for {TODAY}: {e}")
         return {}
     
     # Convert sets to lists for easier handling

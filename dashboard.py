@@ -74,7 +74,7 @@ def convert_to_local(utc_str):
     except Exception:
         return None
 
-def load_and_filter_csv(target_date_str):
+def load_and_filter_data(target_date_str):
     aircraft_data = []
     # Use a dictionary to keep track of the best metadata seen for each hex
     hex_metadata = {}
@@ -92,7 +92,7 @@ def load_and_filter_csv(target_date_str):
             return naive_dt.replace(tzinfo=LOCAL_TZ)
         return naive_dt
 
-    # Determine which UTC log files could contain rows for the selected local date
+    # Determine which UTC dates could contain rows for the selected local date
     utc_dates = {target_date}
     if LOCAL_TZ:
         try:
@@ -110,63 +110,52 @@ def load_and_filter_csv(target_date_str):
             logger.debug(f"Failed to compute UTC date range for {target_date}: {e}")
             utc_dates = {target_date}
 
-    # Only load files for the relevant UTC dates (faster than scanning everything)
-    candidates = []
-    for utc_date in sorted(utc_dates):
-        candidates.append(os.path.join(LOG_DIR, f"aircraft_log_{utc_date}.csv"))
-        candidates.append(os.path.join(LOG_DIR, f"aircraft_log_{utc_date}.csv.gz"))
+    utc_dates_str = [str(d) for d in sorted(utc_dates)]
+    placeholders = ','.join('?' for _ in utc_dates_str)
 
     try:
-        for filepath in candidates:
-            if not os.path.exists(filepath):
-                continue
-            try:
-                if filepath.endswith('.gz'):
-                    file_handle = gzip.open(filepath, 'rt', encoding='utf-8', errors='ignore')
-                else:
-                    file_handle = open(filepath, 'r', newline='', encoding='utf-8', errors='ignore')
-
-                with file_handle:
-                    reader = csv.DictReader(file_handle)
-                    if not reader.fieldnames:
-                        continue
-                        
-                    # Normalize fieldnames (handle extra spaces or case differences)
-                    field_map = {f.strip().lower(): f for f in reader.fieldnames}
+        import sys
+        sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+        from airlogger.db import get_db_connection
+        
+        with get_db_connection() as conn:
+            cursor = conn.cursor()
+            query = f"SELECT * FROM flights WHERE date(timestamp_utc) IN ({placeholders})"
+            cursor.execute(query, utc_dates_str)
+            
+            for row in cursor.fetchall():
+                time_utc = row['timestamp_utc']
+                local_time = convert_to_local(time_utc)
+                if not local_time or local_time.date() != target_date:
+                    continue
+                
+                row_dict = {
+                    "Time Local": local_time.strftime("%Y-%m-%d %H:%M:%S"),
+                    "Hex": row['hex'].upper() if row['hex'] else "",
+                    "Callsign": row['callsign'] or "",
+                    "Altitude": row['altitude'] or "",
+                    "Speed": row['speed'] or "",
+                    "Latitude": row['lat'] or "",
+                    "Longitude": row['lon'] or "",
+                    "Registration": row['registration'] or "",
+                    "Model": row['model'] or "",
+                    "Operator": row['operator'] or ""
+                }
+                
+                hex_code = row_dict["Hex"]
+                if hex_code:
+                    if hex_code not in hex_metadata:
+                        hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": "", "Callsign": ""}
                     
-                    def get_row_val(r, key):
-                        actual_key = field_map.get(key.lower())
-                        return (r.get(actual_key) or "").strip() if actual_key else ""
-
-                    for row in reader:
-                        time_utc = get_row_val(row, "Time UTC")
-                        local_time = convert_to_local(time_utc)
-                        if not local_time or local_time.date() != target_date:
-                            continue
-                        
-                        row["Time Local"] = local_time.strftime("%Y-%m-%d %H:%M:%S")
-                        
-                        hex_code = get_row_val(row, "Hex").upper()
-                        row["Hex"] = hex_code
-                        
-                        if hex_code:
-                            if hex_code not in hex_metadata:
-                                hex_metadata[hex_code] = {"Registration": "", "Model": "", "Operator": "", "Callsign": ""}
-                            
-                            for field in ["Registration", "Model", "Operator", "Callsign"]:
-                                val = get_row_val(row, field)
-                                if val:
-                                    # Update if we have better data
-                                    if not hex_metadata[hex_code][field] or len(val) > len(hex_metadata[hex_code][field]):
-                                        hex_metadata[hex_code][field] = val
-                                # Keep the row data consistent with normalized fields
-                                row[field] = val
-                        
-                        aircraft_data.append(row)
-            except Exception as e:
-                logger.error(f"Failed to read file {filepath}: {e}")
+                    for field in ["Registration", "Model", "Operator", "Callsign"]:
+                        val = row_dict[field]
+                        if val:
+                            if not hex_metadata[hex_code][field] or len(val) > len(hex_metadata[hex_code][field]):
+                                hex_metadata[hex_code][field] = val
+                
+                aircraft_data.append(row_dict)
     except Exception as e:
-        logger.error(f"Error loading CSV files: {e}")
+        logger.error(f"Error loading from SQLite: {e}")
         return [], 0, 0, [], []
 
     # Second pass: Apply best-known metadata to every row
@@ -212,7 +201,7 @@ def index():
         today_local = now.strftime("%Y-%m-%d")
         selected_date = date_str if date_str else today_local
 
-        data, total, unique, top_operators, top_models = load_and_filter_csv(selected_date)
+        data, total, unique, top_operators, top_models = load_and_filter_data(selected_date)
 
         summary = {
             "total_aircraft": total,
@@ -256,7 +245,7 @@ def status():
     """Return a compact JSON status with totals and the most recent record."""
     try:
         today_local = datetime.now(LOCAL_TZ).strftime("%Y-%m-%d")
-        data, total, unique, top_operators, top_models = load_and_filter_csv(today_local)
+        data, total, unique, top_operators, top_models = load_and_filter_data(today_local)
         last_record = data[0] if data else {}
         resp = {
             'date': today_local,

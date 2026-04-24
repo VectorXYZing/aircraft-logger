@@ -4,58 +4,121 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Aircraft Logger Dashboard</title>
+    
+    <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
+    
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+    
+    <!-- Bootstrap CSS -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
+    <!-- Leaflet CSS -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    
+    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
     <style>
         :root {
-            --bs-body-font-family: 'Inter', system-ui, -apple-system, sans-serif;
+            --bs-body-font-family: 'Outfit', system-ui, -apple-system, sans-serif;
+            --glass-bg: rgba(255, 255, 255, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.4);
+            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
+            --bg-gradient: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
+            --text-main: #2c3e50;
             --scroll-indicator-bg: #fff;
         }
         
         [data-bs-theme="dark"] {
-            --scroll-indicator-bg: #212529;
+            --glass-bg: rgba(20, 25, 30, 0.75);
+            --glass-border: rgba(255, 255, 255, 0.05);
+            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
+            --bg-gradient: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
+            --text-main: #f8f9fa;
+            --scroll-indicator-bg: #14191e;
         }
         
         body {
+            background: var(--bg-gradient);
+            background-attachment: fixed;
             min-height: 100vh;
-            transition: background-color 0.3s ease;
+            color: var(--text-main);
+            transition: background 0.5s ease;
         }
 
         .card {
-            transition: transform 0.2s ease, box-shadow 0.2s ease;
-            border: none;
-        }
-
-        .card:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15) !important;
-        }
-
-        .table-hover tbody tr:hover {
-            background-color: var(--bs-primary-bg-subtle);
-        }
-
-        .stat-card {
-            border-radius: 1rem;
+            background: var(--glass-bg);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid var(--glass-border);
+            box-shadow: var(--glass-shadow);
+            border-radius: 1.25rem;
+            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
             overflow: hidden;
         }
 
+        .card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.15);
+        }
+
+        [data-bs-theme="dark"] .card:hover {
+            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6);
+        }
+
         .stat-card .card-body {
-            padding: 1.5rem;
+            padding: 1.75rem;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Create a gradient overlay for stat cards */
+        .stat-card::before {
+            content: '';
+            position: absolute;
+            top: 0; left: 0; right: 0; bottom: 0;
+            opacity: 0.85;
+            z-index: 0;
+        }
+
+        .stat-card.bg-primary::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
+        .stat-card.bg-success::before { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
+        .stat-card.bg-info::before { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
+        .stat-card.bg-danger::before { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); }
+
+        .stat-card.bg-primary, .stat-card.bg-success, .stat-card.bg-info, .stat-card.bg-danger {
+            background: transparent !important; /* override bootstrap */
+            color: #fff !important;
+            border: none;
         }
 
         .stat-value {
-            font-size: 2.5rem;
+            font-size: 2.8rem;
             font-weight: 700;
             line-height: 1;
+            margin-bottom: 0.5rem;
         }
 
         .stat-label {
-            font-size: 0.875rem;
+            font-size: 0.9rem;
             text-transform: uppercase;
-            letter-spacing: 0.05em;
-            opacity: 0.8;
+            letter-spacing: 0.1em;
+            font-weight: 500;
+            opacity: 0.9;
+        }
+
+        .table-responsive {
+            border-radius: 0.75rem;
+        }
+
+        .table {
+            --bs-table-bg: transparent;
+            --bs-table-color: var(--text-main);
+            margin-bottom: 0;
         }
 
         .table th {
@@ -63,19 +126,76 @@
             text-transform: uppercase;
             font-size: 0.75rem;
             letter-spacing: 0.05em;
+            border-bottom-width: 2px;
+            cursor: pointer;
+            transition: color 0.2s;
+        }
+        
+        .table th:hover {
+            color: var(--bs-primary);
+        }
+
+        .table td, .table th {
+            padding: 1rem 0.75rem;
+            vertical-align: middle;
+        }
+
+        .table-hover tbody tr {
+            transition: background-color 0.2s ease, transform 0.2s ease;
+        }
+
+        .table-hover tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.4);
+            transform: scale(1.005);
+        }
+
+        [data-bs-theme="dark"] .table-hover tbody tr:hover {
+            background-color: rgba(255, 255, 255, 0.05);
         }
 
         .search-box {
             max-width: 300px;
         }
+        
+        .search-box .form-control {
+            border-radius: 2rem;
+            padding-left: 1.2rem;
+            background-color: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+        }
+
+        .search-box .form-control:focus {
+            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
+            border-color: #86b7fe;
+        }
+
+        /* Date Picker styling */
+        input[type="date"].form-control {
+            background-color: var(--glass-bg);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            border-radius: 0.5rem;
+        }
+
+        .btn-primary {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
+            transition: transform 0.2s, box-shadow 0.2s;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4);
+        }
 
         .loading {
             position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.5);
+            top: 0; left: 0; right: 0; bottom: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(5px);
+            -webkit-backdrop-filter: blur(5px);
             display: none;
             justify-content: center;
             align-items: center;
@@ -86,26 +206,27 @@
             display: flex;
         }
 
-        .spinner {
-            width: 3rem;
-            height: 3rem;
-        }
-
-        @media (max-width: 768px) {
-            .stat-value {
-                font-size: 2rem;
-            }
-            
-            .table-responsive {
-                font-size: 0.875rem;
-            }
-        }
-
         .theme-switch {
             position: fixed;
-            top: 1rem;
-            right: 1rem;
+            top: 1.5rem;
+            right: 1.5rem;
             z-index: 1000;
+            border-radius: 50%;
+            width: 45px;
+            height: 45px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: var(--glass-bg);
+            backdrop-filter: blur(10px);
+            border: 1px solid var(--glass-border);
+            color: var(--text-main);
+            box-shadow: var(--glass-shadow);
+            transition: all 0.3s ease;
+        }
+        
+        .theme-switch:hover {
+            transform: scale(1.1) rotate(15deg);
         }
 
         .table-scroll-indicator {
@@ -113,229 +234,338 @@
             right: 0;
             top: 0;
             height: 100%;
-            width: 32px;
-            background: linear-gradient(to left, var(--scroll-indicator-bg) 60%, transparent 100%);
+            width: 40px;
+            background: linear-gradient(to left, var(--scroll-indicator-bg) 30%, transparent 100%);
             pointer-events: none;
             z-index: 10;
+            opacity: 0.8;
         }
 
-        @media (max-width: 768px) {
-            .stat-value {
-                font-size: 2rem;
-            }
-            .table-responsive {
-                font-size: 0.875rem;
-            }
-            .table-scroll-indicator {
-                width: 24px;
-            }
-        }
-
-        .table th.registration-col, .table td.registration-col {
+        .registration-col {
             min-width: 130px;
             white-space: nowrap;
         }
+
+        /* Map Container */
+        #flightMap {
+            height: 450px; 
+            border-radius: 1rem; 
+            z-index: 1;
+            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
+        }
+
+        .pulse-icon {
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
     </style>
 </head>
 <body>
-    <button class="btn btn-outline-primary theme-switch" onclick="toggleTheme()">
-        <i class="bi bi-moon-stars"></i>
+    <button class="theme-switch" onclick="toggleTheme()" aria-label="Toggle Theme">
+        <i class="bi bi-moon-stars-fill fs-5"></i>
     </button>
 
     <div class="loading">
-        <div class="spinner-border text-light" role="status">
+        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
             <span class="visually-hidden">Loading...</span>
         </div>
     </div>
 
-    <div class="container-fluid py-4">
+    <div class="container-fluid py-5 px-md-5">
         <div class="row justify-content-center">
-            <div class="col-12 col-xl-10">
-                <div class="text-center mb-4">
-                    <h1 class="display-4 mb-0">🛫 Aircraft Logger Dashboard</h1>
-                    <small class="text-muted">v{{ version }}</small>
+            <div class="col-12 col-xl-11">
+                
+                <!-- Header Section -->
+                <div class="text-center mb-5">
+                    <h1 class="display-4 fw-bold mb-2" style="letter-spacing: -1px;">🛫 Aircraft Logger</h1>
+                    <p class="lead opacity-75 mb-0">Dashboard v{{ version }}</p>
                 </div>
 
-                <form method="get" class="mb-4 d-flex justify-content-center gap-2">
-                    <input type="date" name="date" class="form-control w-auto"
-               value="{{ selected_date }}" max="{{ max_date }}">
-                    <button type="submit" class="btn btn-primary">
-                        <i class="bi bi-search"></i> Load
-                    </button>
-    </form>
+                <!-- Date Selector -->
+                <div class="card p-3 mb-5 mx-auto shadow-sm" style="max-width: 400px; border-radius: 3rem;">
+                    <form method="get" class="d-flex justify-content-between align-items-center gap-3 m-0">
+                        <input type="date" name="date" class="form-control border-0 bg-transparent shadow-none"
+                               value="{{ selected_date }}" max="{{ max_date }}" style="font-size: 1.1rem; font-weight: 500;">
+                        <button type="submit" class="btn btn-primary rounded-pill px-4">
+                            <i class="bi bi-search me-1"></i> View
+                        </button>
+                    </form>
+                </div>
 
-    {% if summary %}
-                <div class="row g-4 mb-4">
-        <div class="col-md-3">
-                        <div class="card stat-card bg-primary text-white">
+                {% if summary %}
+                <!-- Statistics Cards -->
+                <div class="row g-4 mb-5">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card stat-card bg-primary h-100">
                             <div class="card-body">
                                 <div class="stat-value">{{ summary.total_aircraft }}</div>
-                                <div class="stat-label">Total Records</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-                        <div class="card stat-card bg-success text-white">
+                                <div class="stat-label">Total Messages</div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card stat-card bg-success h-100">
                             <div class="card-body">
                                 <div class="stat-value">{{ summary.unique_aircraft }}</div>
                                 <div class="stat-label">Unique Aircraft</div>
-                </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-                        <div class="card stat-card bg-info text-white">
-                <div class="card-body">
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card stat-card bg-info h-100">
+                            <div class="card-body">
                                 <div class="stat-value">{{ summary.top_operators|length }}</div>
                                 <div class="stat-label">Top Operators</div>
                             </div>
                         </div>
                     </div>
-        <div class="col-md-3">
-                        <div class="card stat-card {% if health_status.healthy %}bg-success{% else %}bg-danger{% endif %} text-white">
+                    <div class="col-sm-6 col-lg-3">
+                        <div class="card stat-card {% if health_status.healthy %}bg-success{% else %}bg-danger{% endif %} h-100">
                             <div class="card-body">
                                 <div class="stat-value">
                                     {% if health_status.healthy %}
-                                        <i class="bi bi-heart-pulse"></i>
+                                        <i class="bi bi-heart-pulse-fill pulse-icon"></i>
                                     {% else %}
-                                        <i class="bi bi-exclamation-triangle"></i>
+                                        <i class="bi bi-exclamation-triangle-fill"></i>
                                     {% endif %}
                                 </div>
                                 <div class="stat-label">Logger Health</div>
-                                <small>
+                                <div class="small mt-1 fw-bold opacity-75">
                                     {% if health_status.healthy %}
                                         Healthy ({{ health_status.age_seconds }}s ago)
                                     {% else %}
-                                        Unhealthy{% if health_status.age_seconds %} ({{ health_status.age_seconds }}s ago){% endif %}
+                                        Offline{% if health_status.age_seconds %} ({{ health_status.age_seconds }}s ago){% endif %}
                                     {% endif %}
-                                </small>
+                                </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <div class="row g-4 mb-4 justify-content-center">
-                    <div class="col-md-4">
+                <!-- Map Section -->
+                <div class="row mb-5">
+                    <div class="col-12">
                         <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">Top Operators</h5>
-                                <canvas id="operatorsChart"></canvas>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-md-4">
-                        <div class="card h-100">
-                            <div class="card-body">
-                                <h5 class="card-title">Model Distribution</h5>
-                                <canvas id="modelsChart"></canvas>
+                            <div class="card-body p-4">
+                                <h4 class="card-title fw-bold mb-4">🗺️ Flight Paths</h4>
+                                <div id="flightMap"></div>
                             </div>
                         </div>
                     </div>
                 </div>
-    {% endif %}
 
-                <div class="card shadow-sm">
-        <div class="card-body">
-                        <div class="d-flex justify-content-between align-items-center mb-3">
-                            <h5 class="card-title mb-0">Aircraft on {{ selected_date }}</h5>
+                <!-- Advanced Analytics Charts Section -->
+                <div class="row g-4 mb-5">
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body p-4">
+                                <h4 class="card-title fw-bold mb-4">📈 Activity Timeline</h4>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="timelineChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-body p-4">
+                                <h4 class="card-title fw-bold mb-4">🚀 Altitude vs Speed</h4>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="scatterChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Existing Charts Section -->
+                <div class="row g-4 mb-5">
+                    <div class="col-lg-7">
+                        <div class="card h-100">
+                            <div class="card-body p-4">
+                                <h4 class="card-title fw-bold mb-4">🏢 Top Operators</h4>
+                                <div style="height: 300px; position: relative;">
+                                    <canvas id="operatorsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="col-lg-5">
+                        <div class="card h-100">
+                            <div class="card-body p-4">
+                                <h4 class="card-title fw-bold mb-4">✈️ Model Distribution</h4>
+                                <div style="height: 300px; position: relative; display: flex; justify-content: center;">
+                                    <canvas id="modelsChart"></canvas>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endif %}
+
+                <!-- Data Table -->
+                <div class="card mb-5">
+                    <div class="card-body p-4">
+                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
+                            <div>
+                                <h4 class="card-title fw-bold mb-1">📋 Aircraft Activity</h4>
+                                <p class="text-muted small mb-0">Showing records for {{ selected_date }}</p>
+                            </div>
                             <div class="search-box">
-                                <input type="text" class="form-control" id="searchInput" 
-                                       placeholder="Search aircraft...">
+                                <input type="text" class="form-control" id="searchInput" placeholder="Search Hex, Callsign, Reg...">
                             </div>
                         </div>
-            <div class="table-responsive position-relative">
-                <p class="text-muted mb-1">Scroll right to see more columns &rarr;</p>
-                <div class="table-scroll-indicator"></div>
-                <table class="table table-hover" id="aircraftTable">
-                    <thead>
-                        <tr>
-                            <th onclick="sortTable(0)" style="white-space: nowrap;">Time (Local) <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(1)">Hex <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(2)">Callsign <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(3)">Altitude <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(4)">Speed <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(5)">Latitude <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(6)">Longitude <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(7)" class="registration-col">Registration <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(8)">Model <i class="bi bi-arrow-down-up"></i></th>
-                            <th onclick="sortTable(9)">Operator <i class="bi bi-arrow-down-up"></i></th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        {% for row in data %}
-                        <tr>
-                            <td><span style="white-space: nowrap;">{{ row["Time Local"] }}</span></td>
-                            <td><span style="white-space: nowrap;">{{ row["Hex"] }}</span></td>
-                            <td><span style="white-space: nowrap;">{{ row["Callsign"] }}</span></td>
-                            <td><span style="white-space: nowrap;">{{ row["Altitude"] }} ft</span></td>
-                            <td><span style="white-space: nowrap;">{{ row["Speed"] }} kts</span></td>
-                            <td><span style="white-space: nowrap;">{{ row["Latitude"] }}</span></td>
-                            <td><span style="white-space: nowrap;">{{ row["Longitude"] }}</span></td>
-                            <td class="registration-col">
-                                {% if row.get("Registration") %}
-                                <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}"
-                                   target="_blank"
-                                   class="btn btn-sm btn-primary d-inline-flex align-items-center"
-                                   style="font-weight:600;">
-                                  <i class="bi bi-airplane me-1"></i> {{ row.get("Registration") }}
-                                </a>
-                                {% endif %}
-                            </td>
-                            <td><span style="white-space: nowrap;">{{ row.get("Model", "") }}</span></td>
-                            <td><span style="white-space: nowrap;">{{ row.get("Operator", "") }}</span></td>
-                        </tr>
-                        {% endfor %}
-                    </tbody>
-                </table>
+
+                        <div class="table-responsive position-relative">
+                            <div class="table-scroll-indicator d-md-none"></div>
+                            <table class="table table-hover align-middle" id="aircraftTable">
+                                <thead>
+                                    <tr>
+                                        <th onclick="sortTable(0)">Time <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(1)">Hex <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(2)">Callsign <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(3)">Altitude <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(4)">Speed <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(5)">Lat <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(6)">Lon <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(7)" class="registration-col">Reg <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(8)">Model <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                        <th onclick="sortTable(9)">Operator <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    {% for row in data %}
+                                    <tr>
+                                        <td class="fw-medium text-nowrap">{{ row["Time Local"][-8:] }}</td> <!-- Just showing time part for cleaner UI -->
+                                        <td class="font-monospace text-muted">{{ row["Hex"] }}</td>
+                                        <td class="fw-bold">{{ row["Callsign"] }}</td>
+                                        <td>
+                                            {% if row["Altitude"] %}
+                                            <span class="badge bg-secondary bg-opacity-25 text-body rounded-pill px-2 py-1">{{ row["Altitude"] }} ft</span>
+                                            {% endif %}
+                                        </td>
+                                        <td>
+                                            {% if row["Speed"] %}
+                                            {{ row["Speed"] }} <small class="text-muted">kts</small>
+                                            {% endif %}
+                                        </td>
+                                        <td class="small">{{ row["Latitude"] }}</td>
+                                        <td class="small">{{ row["Longitude"] }}</td>
+                                        <td class="registration-col">
+                                            {% if row.get("Registration") %}
+                                            <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}"
+                                               target="_blank"
+                                               class="btn btn-sm btn-primary rounded-pill d-inline-flex align-items-center px-3"
+                                               style="font-size: 0.8rem; font-weight: 600;">
+                                              <i class="bi bi-airplane-fill me-2"></i> {{ row.get("Registration") }}
+                                            </a>
+                                            {% endif %}
+                                        </td>
+                                        <td class="small fw-medium">{{ row.get("Model", "") }}</td>
+                                        <td class="small text-truncate" style="max-width: 150px;" title="{{ row.get('Operator', '') }}">{{ row.get("Operator", "") }}</td>
+                                    </tr>
+                                    {% endfor %}
+                                </tbody>
+                            </table>
+                            {% if not data %}
+                            <div class="text-center py-5 text-muted">
+                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
+                                <h5>No aircraft data found for this date.</h5>
+                            </div>
+                            {% endif %}
+                        </div>
+                    </div>
+                </div>
+
             </div>
         </div>
     </div>
-</div>
 
+    <!-- Scripts -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-<script>
-        // Theme switching
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+    <script>
+        // --- Theme Switching ---
         function toggleTheme() {
             const html = document.documentElement;
             const isDark = html.getAttribute('data-bs-theme') === 'dark';
-            html.setAttribute('data-bs-theme', isDark ? 'light' : 'dark');
-            const icon = document.querySelector('.theme-switch i');
-            icon.className = isDark ? 'bi bi-moon-stars' : 'bi bi-sun';
-        }
-
-        // Table sorting
-function sortTable(n) {
-    const table = document.getElementById("aircraftTable");
-    const tbody = table.querySelector("tbody");
-    const rows = Array.from(tbody.querySelectorAll("tr"));
-    let dir = table.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
-    table.setAttribute("data-sort-dir", dir);
-
-    rows.sort((a, b) => {
-        let x = a.cells[n].textContent.trim();
-        let y = b.cells[n].textContent.trim();
-
-        if (n === 0) {
-            x = new Date(x);
-            y = new Date(y);
-        } else {
-            let xNum = parseFloat(x);
-            let yNum = parseFloat(y);
-            if (!isNaN(xNum) && !isNaN(yNum)) {
-                x = xNum;
-                y = yNum;
-            } else {
-                x = x.toLowerCase();
-                y = y.toLowerCase();
+            const newTheme = isDark ? 'light' : 'dark';
+            html.setAttribute('data-bs-theme', newTheme);
+            localStorage.setItem('theme', newTheme);
+            updateThemeIcon(newTheme);
+            
+            // Reload map tiles if map exists
+            if (window.flightMap && window.tileLayer) {
+                const url = newTheme === 'dark' 
+                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+                window.tileLayer.setUrl(url);
             }
         }
 
+        function updateThemeIcon(theme) {
+            const icon = document.querySelector('.theme-switch i');
+            if(theme === 'dark') {
+                icon.className = 'bi bi-sun-fill fs-5';
+            } else {
+                icon.className = 'bi bi-moon-stars-fill fs-5';
+            }
+        }
+
+        // Initialize Theme
+        const savedTheme = localStorage.getItem('theme') || 'light';
+        document.documentElement.setAttribute('data-bs-theme', savedTheme);
+        updateThemeIcon(savedTheme);
+
+
+        // --- Table Sorting ---
+        function sortTable(n) {
+            const table = document.getElementById("aircraftTable");
+            const tbody = table.querySelector("tbody");
+            const rows = Array.from(tbody.querySelectorAll("tr"));
+            let dir = table.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
+            table.setAttribute("data-sort-dir", dir);
+
+            rows.sort((a, b) => {
+                let x = a.cells[n].textContent.trim();
+                let y = b.cells[n].textContent.trim();
+
+                // Custom sorting logic for numbers/times
+                if (n === 0) { // Time
+                    x = x.replace(/[^0-9:]/g, '');
+                    y = y.replace(/[^0-9:]/g, '');
+                } else {
+                    let xNum = parseFloat(x.replace(/[^0-9.-]+/g,""));
+                    let yNum = parseFloat(y.replace(/[^0-9.-]+/g,""));
+                    if (!isNaN(xNum) && !isNaN(yNum) && x !== "" && y !== "") {
+                        x = xNum;
+                        y = yNum;
+                    } else {
+                        x = x.toLowerCase();
+                        y = y.toLowerCase();
+                    }
+                }
+
                 return dir === "asc" ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0);
-    });
+            });
 
-    rows.forEach(row => tbody.appendChild(row));
-}
+            rows.forEach(row => tbody.appendChild(row));
+            
+            // Update chevron icons
+            const headers = table.querySelectorAll("th i");
+            headers.forEach(i => i.className = "bi bi-chevron-expand ms-1 text-muted");
+            const activeIcon = table.querySelectorAll("th")[n].querySelector("i");
+            activeIcon.className = dir === "asc" ? "bi bi-chevron-up ms-1 text-primary" : "bi bi-chevron-down ms-1 text-primary";
+        }
 
-        // Search functionality
+        // --- Search Functionality ---
         document.getElementById('searchInput').addEventListener('input', function(e) {
             const searchText = e.target.value.toLowerCase();
             const rows = document.querySelectorAll('#aircraftTable tbody tr');
@@ -346,79 +576,12 @@ function sortTable(n) {
             });
         });
 
-        // Charts
-        {% if summary %}
-        // Operators Chart
-        new Chart(document.getElementById('operatorsChart'), {
-            type: 'bar',
-            data: {
-                labels: {{ summary.top_operators|map(attribute='0')|list|tojson }},
-                datasets: [{
-                    label: 'Number of Aircraft',
-                    data: {{ summary.top_operators|map(attribute='1')|list|tojson }},
-                    backgroundColor: 'rgba(54, 162, 235, 0.8)',
-                    borderColor: 'rgba(54, 162, 235, 1)',
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        display: false
-                    }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: {
-                            stepSize: 1
-                        }
-                    }
-                }
-            }
-        });
-        // Model Distribution Doughnut Chart
-        new Chart(document.getElementById('modelsChart'), {
-            type: 'doughnut',
-            data: {
-                labels: {{ summary.top_models|map(attribute='0')|list|tojson }},
-                datasets: [{
-                    data: {{ summary.top_models|map(attribute='1')|list|tojson }},
-                    backgroundColor: [
-                        'rgba(255, 99, 132, 0.7)',
-                        'rgba(54, 162, 235, 0.7)',
-                        'rgba(255, 206, 86, 0.7)',
-                        'rgba(75, 192, 192, 0.7)',
-                        'rgba(153, 102, 255, 0.7)'
-                    ],
-                    borderColor: [
-                        'rgba(255, 99, 132, 1)',
-                        'rgba(54, 162, 235, 1)',
-                        'rgba(255, 206, 86, 1)',
-                        'rgba(75, 192, 192, 1)',
-                        'rgba(153, 102, 255, 1)'
-                    ],
-                    borderWidth: 1
-                }]
-            },
-            options: {
-                responsive: true,
-                plugins: {
-                    legend: {
-                        position: 'bottom'
-                    }
-                }
-            }
-        });
-        {% endif %}
-
         // Loading state
         document.querySelector('form').addEventListener('submit', function() {
             document.querySelector('.loading').classList.add('active');
         });
 
-        // Hide scroll indicator at end of table
+        // Hide scroll indicator logic
         document.addEventListener('DOMContentLoaded', function() {
             const tableResponsive = document.querySelector('.table-responsive');
             const indicator = document.querySelector('.table-scroll-indicator');
@@ -426,9 +589,9 @@ function sortTable(n) {
                 function updateIndicator() {
                     const maxScroll = tableResponsive.scrollWidth - tableResponsive.clientWidth;
                     if (tableResponsive.scrollLeft >= maxScroll - 2) {
-                        indicator.style.display = 'none';
+                        indicator.style.opacity = '0';
                     } else {
-                        indicator.style.display = '';
+                        indicator.style.opacity = '0.8';
                     }
                 }
                 tableResponsive.addEventListener('scroll', updateIndicator);
@@ -436,6 +599,271 @@ function sortTable(n) {
                 updateIndicator();
             }
         });
-</script>
+
+        // --- Charts and Map ---
+        {% if summary %}
+        
+        // 1. Leaflet Map Initialization
+        const mapThemeUrl = document.documentElement.getAttribute('data-bs-theme') === 'dark'
+            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
+            
+        window.flightMap = L.map('flightMap').setView([0, 0], 2);
+        window.tileLayer = L.tileLayer(mapThemeUrl, {
+            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
+            subdomains: 'abcd',
+            maxZoom: 19
+        }).addTo(window.flightMap);
+
+        const aircraftData = [
+            {% for row in data %}
+            {
+                time: "{{ row['Time Local'] }}",
+                speed: parseFloat("{{ row['Speed'] }}"),
+                hex: "{{ row['Hex'] }}",
+                callsign: "{{ row['Callsign'] }}",
+                alt: parseFloat("{{ row['Altitude'] }}"),
+                lat: parseFloat("{{ row['Latitude'] }}"),
+                lon: parseFloat("{{ row['Longitude'] }}"),
+                reg: "{{ row.get('Registration', '') }}",
+                model: "{{ row.get('Model', '') }}"
+            },
+            {% endfor %}
+        ];
+
+        const bounds = [];
+        const markers = L.markerClusterGroup ? L.markerClusterGroup() : null; // Optional: can add marker clustering later
+        
+        const flightsByHex = {};
+        
+        aircraftData.forEach(ac => {
+            if (!isNaN(ac.lat) && !isNaN(ac.lon) && ac.lat !== 0 && ac.lon !== 0) {
+                if (!flightsByHex[ac.hex]) {
+                    flightsByHex[ac.hex] = [];
+                }
+                flightsByHex[ac.hex].push(ac);
+                bounds.push([ac.lat, ac.lon]);
+            }
+        });
+
+        // Vibrant colors for different flight paths
+        const colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
+
+        Object.keys(flightsByHex).forEach((hex, index) => {
+            const flightPath = flightsByHex[hex];
+            const latlngs = flightPath.map(ac => [ac.lat, ac.lon]);
+            const color = colors[index % colors.length];
+            
+            // 1. Draw the line connecting the path
+            L.polyline(latlngs, {
+                color: color,
+                weight: 2,
+                opacity: 0.6,
+                smoothFactor: 1
+            }).addTo(window.flightMap);
+
+            // 2. Draw small dots at each coordinate
+            flightPath.forEach((ac, i) => {
+                // Make the most recent position slightly larger
+                const isLatest = (i === 0);
+                const marker = L.circleMarker([ac.lat, ac.lon], {
+                    radius: isLatest ? 5 : 3,
+                    fillColor: color,
+                    color: isLatest ? "#fff" : "transparent",
+                    weight: isLatest ? 2 : 0,
+                    opacity: 1,
+                    fillOpacity: 0.8
+                }).addTo(window.flightMap);
+
+                let popupText = `<div style="font-family:'Outfit',sans-serif;">
+                                    <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong><br>`;
+                if (ac.callsign) popupText += `<b>Callsign:</b> ${ac.callsign}<br>`;
+                if (ac.reg) popupText += `<b>Reg:</b> ${ac.reg}<br>`;
+                if (ac.model) popupText += `<b>Model:</b> ${ac.model}<br>`;
+                if (ac.alt) popupText += `<b>Altitude:</b> ${ac.alt} ft<br>`;
+                if (ac.speed) popupText += `<b>Speed:</b> ${ac.speed} kts<br>`;
+                if (ac.time) popupText += `<b>Time:</b> ${ac.time.split(' ')[1]}`;
+                popupText += `</div>`;
+                
+                marker.bindPopup(popupText);
+            });
+        });
+
+        if (bounds.length > 0) {
+            window.flightMap.fitBounds(bounds, { padding: [30, 30] });
+        }
+
+
+        // 2. Chart.js Defaults
+        Chart.defaults.font.family = "'Outfit', sans-serif";
+        Chart.defaults.color = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#adb5bd' : '#6c757d';
+
+        // Listen for theme changes to update charts
+        const originalToggleTheme = toggleTheme;
+        toggleTheme = function() {
+            originalToggleTheme();
+            const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
+            Chart.defaults.color = isDark ? '#adb5bd' : '#6c757d';
+            if(window.opChart) window.opChart.update();
+            if(window.modChart) window.modChart.update();
+            if(window.timelineChart) window.timelineChart.update();
+            if(window.scatterChart) window.scatterChart.update();
+        };
+
+        // Operators Chart
+        const opCtx = document.getElementById('operatorsChart').getContext('2d');
+        const gradientPrimary = opCtx.createLinearGradient(0, 0, 0, 400);
+        gradientPrimary.addColorStop(0, 'rgba(102, 126, 234, 0.8)');
+        gradientPrimary.addColorStop(1, 'rgba(118, 75, 162, 0.8)');
+
+        window.opChart = new Chart(opCtx, {
+            type: 'bar',
+            data: {
+                labels: {{ summary.top_operators|map(attribute='0')|list|tojson }},
+                datasets: [{
+                    label: 'Aircraft Count',
+                    data: {{ summary.top_operators|map(attribute='1')|list|tojson }},
+                    backgroundColor: gradientPrimary,
+                    borderRadius: 6,
+                    borderWidth: 0
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false }
+                },
+                scales: {
+                    y: {
+                        beginAtZero: true,
+                        ticks: { stepSize: 1 },
+                        grid: { color: 'rgba(0,0,0,0.05)' }
+                    },
+                    x: {
+                        grid: { display: false }
+                    }
+                }
+            }
+        });
+
+        // Model Distribution Doughnut Chart
+        const modCtx = document.getElementById('modelsChart').getContext('2d');
+        window.modChart = new Chart(modCtx, {
+            type: 'doughnut',
+            data: {
+                labels: {{ summary.top_models|map(attribute='0')|list|tojson }},
+                datasets: [{
+                    data: {{ summary.top_models|map(attribute='1')|list|tojson }},
+                    backgroundColor: [
+                        '#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844'
+                    ],
+                    borderWidth: 0,
+                    hoverOffset: 10
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                cutout: '65%',
+                plugins: {
+                    legend: {
+                        position: 'right',
+                        labels: {
+                            boxWidth: 12,
+                            padding: 15,
+                            font: { size: 11 }
+                        }
+                    }
+                }
+            }
+        });
+
+        // 3. Activity Timeline Chart
+        const hourCounts = new Array(24).fill(0);
+        aircraftData.forEach(ac => {
+            if (ac.time) {
+                const match = ac.time.match(/ (\d{2}):/);
+                if (match) {
+                    const hour = parseInt(match[1], 10);
+                    hourCounts[hour]++;
+                }
+            }
+        });
+        
+        const timelineCtx = document.getElementById('timelineChart').getContext('2d');
+        window.timelineChart = new Chart(timelineCtx, {
+            type: 'line',
+            data: {
+                labels: Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`),
+                datasets: [{
+                    label: 'Activity',
+                    data: hourCounts,
+                    borderColor: '#4facfe',
+                    backgroundColor: 'rgba(79, 172, 254, 0.2)',
+                    fill: true,
+                    tension: 0.4
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: { legend: { display: false } },
+                scales: {
+                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
+                }
+            }
+        });
+
+        // 4. Altitude vs Speed Scatter Plot
+        const scatterData = aircraftData
+            .filter(ac => !isNaN(ac.speed) && !isNaN(ac.alt) && ac.speed > 0 && ac.alt > 0)
+            .map(ac => ({
+                x: ac.speed,
+                y: ac.alt,
+                hex: ac.hex,
+                model: ac.model
+            }));
+
+        const scatterCtx = document.getElementById('scatterChart').getContext('2d');
+        window.scatterChart = new Chart(scatterCtx, {
+            type: 'scatter',
+            data: {
+                datasets: [{
+                    label: 'Aircraft',
+                    data: scatterData,
+                    backgroundColor: 'rgba(255, 8, 68, 0.6)',
+                    borderColor: '#ff0844',
+                    pointRadius: 5,
+                    pointHoverRadius: 8
+                }]
+            },
+            options: {
+                responsive: true,
+                maintainAspectRatio: false,
+                plugins: {
+                    legend: { display: false },
+                    tooltip: {
+                        callbacks: {
+                            label: function(ctx) {
+                                const raw = ctx.raw;
+                                return `${raw.hex} (${raw.model}): ${raw.x} kts, ${raw.y} ft`;
+                            }
+                        }
+                    }
+                },
+                scales: {
+                    x: {
+                        title: { display: true, text: 'Speed (kts)' }
+                    },
+                    y: {
+                        title: { display: true, text: 'Altitude (ft)' }
+                    }
+                }
+            }
+        });
+        {% endif %}
+
+    </script>
 </body>
 </html>

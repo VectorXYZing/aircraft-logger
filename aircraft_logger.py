@@ -13,6 +13,8 @@ import sys
 import gzip
 import shutil
 
+from airlogger.db import init_db, insert_flight
+
 # Load environment variables
 load_dotenv()
 
@@ -309,6 +311,10 @@ def log_aircraft(data):
     row = [timestamp, hex_code, callsign, altitude, speed, lat, lon, reg, model, operator]
 
     try:
+        # Write to SQLite
+        insert_flight(timestamp, hex_code, callsign, altitude, speed, lat, lon, reg, model, operator)
+        
+        # Write to CSV (legacy backup)
         log_handle = ensure_log_file()
         writer = csv.writer(log_handle)
         writer.writerow(row)
@@ -333,8 +339,16 @@ def create_socket():
 logger.info("Starting aircraft logger...")
 logger.info(f"Socket timeout: {SOCKET_TIMEOUT}s, Heartbeat interval: {HEARTBEAT_INTERVAL}s")
 logger.info(f"Log retention: {LOG_RETENTION_DAYS} days, cleanup interval: {CACHE_CLEANUP_INTERVAL}s")
+
+# Initialize SQLite database
+try:
+    init_db()
+    logger.info("SQLite database initialized.")
+except Exception as e:
+    logger.error(f"Failed to initialize SQLite database: {e}")
+
 log_path = ensure_log_file()
-logger.info(f"Logging to: {log_path}")
+logger.info(f"Logging to: {log_path} and SQLite DB")
 logger.info(f"Connecting to {HOST}:{PORT}...")
 
 def write_heartbeat(line_count):

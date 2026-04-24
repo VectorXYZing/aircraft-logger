@@ -1,0 +1,21 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#8ec5fc" />
+      <stop offset="100%" stop-color="#e0c3fc" />
+    </linearGradient>
+    <linearGradient id="planeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#667eea" />
+      <stop offset="100%" stop-color="#764ba2" />
+    </linearGradient>
+    <filter id="shadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="6" flood-color="#764ba2" flood-opacity="0.4" />
+    </filter>
+  </defs>
+  
+  <!-- Background Circle -->
+  <circle cx="256" cy="256" r="240" fill="url(#bgGrad)" />
+  
+  <!-- Plane Body -->
+  <path d="M410.6 220.5L256 128.8 255.4 34.6c-.2-15.6-13.8-27.9-29.4-27.4-14.7.5-26.6 13-26.6 27.7V128L45.4 220.5c-6.8 4-10.8 11.5-10.4 19.3.4 8.2 5.5 15.3 13.2 18l143.1 49.3-17.7 75.3-64.2 26.5c-5.9 2.4-9.6 8.3-9.4 14.7.3 6.9 4.7 12.8 11.2 14.8l82.1 26v47c0 8.8 7.2 16 16 16s16-7.2 16-16v-47l82.1-26c6.5-2 10.9-7.9 11.2-14.8.2-6.4-3.5-12.3-9.4-14.7l-64.2-26.5-17.7-75.3 143.1-49.3c7.7-2.7 12.8-9.8 13.2-18 .4-7.8-3.6-15.3-10.4-19.3z" fill="url(#planeGrad)" filter="url(#shadow)"/>
+</svg>
