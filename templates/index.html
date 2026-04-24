@@ -841,7 +841,7 @@
 
         // 3. Activity Timeline Chart
         const hourCounts = new Array(24).fill(0);
-        aircraftData.forEach(ac => {
+        initialAircraftData.forEach(ac => {
             if (ac.time) {
                 const match = ac.time.match(/ (\d{2}):/);
                 if (match) {
@@ -876,7 +876,7 @@
         });
 
         // 4. Altitude vs Speed Scatter Plot
-        const scatterData = aircraftData
+        const scatterData = initialAircraftData
             .filter(ac => !isNaN(ac.speed) && !isNaN(ac.alt) && ac.speed > 0 && ac.alt > 0)
             .map(ac => ({
                 x: ac.speed,
