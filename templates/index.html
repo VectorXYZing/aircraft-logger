@@ -21,7 +21,7 @@
     <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}?v={{ version }}">
 </head>
 <body>
     <button class="theme-switch" onclick="toggleTheme()" aria-label="Toggle Theme">
@@ -196,8 +196,18 @@
                                             {% for row in data %}
                                             <tr style="cursor: pointer;" onclick="dashboard.focusAircraft('{{ row['Hex'] }}')">
                                                 <td class="text-nowrap">{{ row['Time Local'].split(' ')[1] }}</td>
-                                                <td class="fw-bold">{{ row['Hex'] }}</td>
-                                                <td class="fw-bold text-primary">{{ row['Callsign'] }}</td>
+                                                <td>
+                                                    <a href="https://www.flightradar24.com/data/aircraft/{{ row['Registration'] if row['Registration'] else '' }}" 
+                                                       target="_blank" class="fw-bold text-decoration-none text-reset" onclick="event.stopPropagation();">
+                                                        {{ row['Hex'] }}
+                                                    </a>
+                                                </td>
+                                                <td>
+                                                    <a href="https://www.flightradar24.com/data/flights/{{ row['Callsign'] }}" 
+                                                       target="_blank" class="fw-bold text-primary text-decoration-none" onclick="event.stopPropagation();">
+                                                        {{ row['Callsign'] }}
+                                                    </a>
+                                                </td>
                                                 <td>{{ row['Registration'] }}</td>
                                                 <td><small>{{ row['Model'] }}</small></td>
                                                 <td class="text-truncate" style="max-width: 150px;">{{ row['Operator'] }}</td>
@@ -224,7 +234,7 @@
     </div>
 
     <!-- Initialization Script -->
-    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
+    <script src="{{ url_for('static', filename='js/app.js') }}?v={{ version }}"></script>
     <script>
         function toggleTheme() {
             const html = document.documentElement;

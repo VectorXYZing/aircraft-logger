@@ -180,7 +180,10 @@ class AircraftDashboard {
         hexes.forEach((hex, idx) => {
             const ac = flightsByHex[hex][0];
             const color = this.colors[idx % this.colors.length];
-            const callsign = ac.callsign ? `<span class="fw-bold fs-5 text-white">${ac.callsign}</span>` : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
+            const callsignLink = ac.callsign ? `https://www.flightradar24.com/data/flights/${ac.callsign}` : '#';
+            const callsign = ac.callsign 
+                ? `<a href="${callsignLink}" target="_blank" class="fw-bold fs-5 text-primary text-decoration-none" onclick="event.stopPropagation();">${ac.callsign}</a>` 
+                : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
             const timeStr = (ac.time || "").split(' ')[1] || "";
             
             html += `
