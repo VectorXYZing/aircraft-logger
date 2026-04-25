@@ -194,7 +194,7 @@
                                         </thead>
                                         <tbody id="historyTableBody">
                                             {% for row in data %}
-                                            <tr>
+                                            <tr style="cursor: pointer;" onclick="dashboard.focusAircraft('{{ row['Hex'] }}')">
                                                 <td class="text-nowrap">{{ row['Time Local'].split(' ')[1] }}</td>
                                                 <td class="fw-bold">{{ row['Hex'] }}</td>
                                                 <td class="fw-bold text-primary">{{ row['Callsign'] }}</td>

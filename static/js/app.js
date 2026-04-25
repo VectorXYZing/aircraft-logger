@@ -96,6 +96,7 @@ class AircraftDashboard {
                     });
                     
                     marker = L.marker([ac.lat, ac.lon], { icon: planeIcon }).addTo(this.flightMap);
+                    marker.hexCode = ac.hex; // Store hex for lookup
                     if (ac.callsign) {
                         marker.bindTooltip(`<b>${ac.callsign}</b>`, {
                             permanent: true, direction: 'right', className: 'bg-transparent border-0 text-white shadow-none fs-6', offset: [10, 0]
@@ -105,11 +106,15 @@ class AircraftDashboard {
                     marker = L.circleMarker([ac.lat, ac.lon], {
                         radius: 3, fillColor: color, color: "transparent", weight: 0, opacity: 1, fillOpacity: 0.8
                     }).addTo(this.flightMap);
+                    marker.hexCode = ac.hex;
                 }
                 
                 marker.bindPopup(this.createPopup(ac, color));
                 this.mapLayers.push(marker);
             });
+            
+            // Add click handler to the path line itself
+            polyline.on('click', () => this.focusAircraft(hex));
         });
 
         if (bounds.length > 0) {
@@ -129,15 +134,36 @@ class AircraftDashboard {
 
     createPopup(ac, color) {
         let timeStr = (ac.time || "").split(' ')[1] || "";
-        return `<div style="font-family:'Outfit',sans-serif;">
-                    <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong><br>
-                    ${ac.callsign ? `<b>Callsign:</b> ${ac.callsign}<br>` : ''}
+        const externalLink = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://adsbexchange.com/api/aircraft/icao/${ac.hex}`;
+        
+        return `<div style="font-family:'Outfit',sans-serif; min-width: 180px;">
+                    <div class="d-flex justify-content-between align-items-center mb-2">
+                        <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong>
+                        <a href="${externalLink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size: 0.7rem;">Details <i class="bi bi-box-arrow-up-right"></i></a>
+                    </div>
+                    ${ac.callsign ? `<b>Callsign:</b> <span class="text-primary fw-bold">${ac.callsign}</span><br>` : ''}
                     ${ac.reg ? `<b>Reg:</b> ${ac.reg}<br>` : ''}
                     ${ac.model ? `<b>Model:</b> ${ac.model}<br>` : ''}
-                    ${ac.alt ? `<b>Altitude:</b> ${ac.alt} ft<br>` : ''}
-                    ${ac.speed ? `<b>Speed:</b> ${ac.speed} kts<br>` : ''}
-                    ${timeStr ? `<b>Time:</b> ${timeStr}` : ''}
+                    <hr class="my-1 opacity-25">
+                    <div class="d-flex justify-content-between">
+                        <span><b>Alt:</b> ${ac.alt} ft</span>
+                        <span><b>Spd:</b> ${ac.speed} kts</span>
+                    </div>
+                    <small class="text-muted mt-1 d-block"><i class="bi bi-clock me-1"></i>Seen at ${timeStr}</small>
                 </div>`;
+    }
+
+    focusAircraft(hex) {
+        // Find the latest marker for this hex
+        const markers = this.mapLayers.filter(l => l instanceof L.Marker || l instanceof L.CircleMarker);
+        const hexMarkers = markers.filter(m => m.hexCode === hex);
+        
+        if (hexMarkers.length > 0) {
+            // Find the one that is an actual Marker (the airplane icon)
+            let target = hexMarkers.find(m => m instanceof L.Marker) || hexMarkers[0];
+            this.flightMap.setView(target.getLatLng(), 12);
+            target.openPopup();
+        }
     }
 
     updateLiveList(flightsByHex) {
@@ -158,7 +184,8 @@ class AircraftDashboard {
             const timeStr = (ac.time || "").split(' ')[1] || "";
             
             html += `
-            <div class="list-group-item bg-transparent px-2 py-2 border-bottom border-secondary border-opacity-25">
+            <div class="list-group-item bg-transparent px-2 py-2 border-bottom border-secondary border-opacity-25" 
+                 style="cursor: pointer;" onclick="dashboard.focusAircraft('${hex}')">
                 <div class="d-flex w-100 justify-content-between align-items-center mb-1">
                     <div class="d-flex align-items-center">
                         <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:${color}; margin-right:8px;"></span>
