@@ -197,7 +197,8 @@
                                             <tr style="cursor: pointer;" onclick="dashboard.focusAircraft('{{ row['Hex'] }}')">
                                                 <td class="text-nowrap">{{ row['Time Local'].split(' ')[1] }}</td>
                                                 <td>
-                                                    <a href="https://www.flightradar24.com/data/aircraft/{{ row['Registration'] if row['Registration'] else '' }}" 
+                                                    {% set fr24_reg = row['Registration'].replace('-', '') if row['Registration'] else '' %}
+                                                    <a href="https://www.flightradar24.com/data/aircraft/{{ fr24_reg }}" 
                                                        target="_blank" class="fw-bold text-decoration-none text-reset" onclick="event.stopPropagation();">
                                                         {{ row['Hex'] }}
                                                     </a>
@@ -208,7 +209,12 @@
                                                         {{ row['Callsign'] }}
                                                     </a>
                                                 </td>
-                                                <td>{{ row['Registration'] }}</td>
+                                                <td>
+                                                    <a href="https://www.flightradar24.com/data/aircraft/{{ fr24_reg }}" 
+                                                       target="_blank" class="text-decoration-none text-reset" onclick="event.stopPropagation();">
+                                                        {{ row['Registration'] }}
+                                                    </a>
+                                                </td>
                                                 <td><small>{{ row['Model'] }}</small></td>
                                                 <td class="text-truncate" style="max-width: 150px;">{{ row['Operator'] }}</td>
                                                 <td>{{ row['Altitude'] }}</td>

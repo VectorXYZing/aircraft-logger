@@ -73,14 +73,18 @@ class AircraftDashboard {
             const latlngs = flightPath.map(ac => [ac.lat, ac.lon]);
             const color = this.colors[index % this.colors.length];
             
-            // Draw path line
-            const polyline = L.polyline(latlngs, {
-                color: color, weight: 2, opacity: 0.6, smoothFactor: 1
-            }).addTo(this.flightMap);
-            this.mapLayers.push(polyline);
+            // ONLY draw the path line if in Live Mode or if we have very few aircraft
+            if (isLive || Object.keys(flightsByHex).length < 5) {
+                const polyline = L.polyline(latlngs, {
+                    color: color, weight: 2, opacity: 0.6, smoothFactor: 1
+                }).addTo(this.flightMap);
+                this.mapLayers.push(polyline);
+            }
 
-            // Draw markers
-            flightPath.forEach((ac, i) => {
+            // Draw markers - in non-live mode, only show the LATEST position to keep it clean
+            const pointsToShow = isLive ? flightPath : [flightPath[0]];
+            
+            pointsToShow.forEach((ac, i) => {
                 const isLatest = (i === 0);
                 let marker;
                 
@@ -113,8 +117,16 @@ class AircraftDashboard {
                 this.mapLayers.push(marker);
             });
             
-            // Add click handler to the path line itself
-            polyline.on('click', () => this.focusAircraft(hex));
+            // In non-live mode, clicking the marker can trigger the full path
+                if (!isLive) {
+                    marker.on('click', () => {
+                        const polyline = L.polyline(latlngs, {
+                            color: color, weight: 3, opacity: 0.9, smoothFactor: 1
+                        }).addTo(this.flightMap);
+                        this.mapLayers.push(polyline);
+                    });
+                }
+            });
         });
 
         if (bounds.length > 0) {
@@ -134,22 +146,23 @@ class AircraftDashboard {
 
     createPopup(ac, color) {
         let timeStr = (ac.time || "").split(' ')[1] || "";
-        const externalLink = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://adsbexchange.com/api/aircraft/icao/${ac.hex}`;
+        // FR24 is much better with Registration than flight number
+        const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg.replace('-', '')}` : `https://www.flightradar24.com/data/flights/${ac.callsign}`;
         
-        return `<div style="font-family:'Outfit',sans-serif; min-width: 180px;">
+        return `<div style="font-family:'Outfit',sans-serif; min-width: 200px;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong>
-                        <a href="${externalLink}" target="_blank" class="btn btn-sm btn-outline-primary py-0 px-1" style="font-size: 0.7rem;">Details <i class="bi bi-box-arrow-up-right"></i></a>
+                        <a href="${fr24Url}" target="_blank" class="btn btn-sm btn-primary py-0 px-2" style="font-size: 0.75rem;">FR24 <i class="bi bi-box-arrow-up-right"></i></a>
                     </div>
                     ${ac.callsign ? `<b>Callsign:</b> <span class="text-primary fw-bold">${ac.callsign}</span><br>` : ''}
-                    ${ac.reg ? `<b>Reg:</b> ${ac.reg}<br>` : ''}
+                    ${ac.reg ? `<b>Reg:</b> <span class="fw-bold">${ac.reg}</span><br>` : ''}
                     ${ac.model ? `<b>Model:</b> ${ac.model}<br>` : ''}
-                    <hr class="my-1 opacity-25">
+                    <hr class="my-2 opacity-25">
                     <div class="d-flex justify-content-between">
                         <span><b>Alt:</b> ${ac.alt} ft</span>
                         <span><b>Spd:</b> ${ac.speed} kts</span>
                     </div>
-                    <small class="text-muted mt-1 d-block"><i class="bi bi-clock me-1"></i>Seen at ${timeStr}</small>
+                    <small class="text-muted mt-2 d-block text-center"><i class="bi bi-clock me-1"></i>Last seen at ${timeStr}</small>
                 </div>`;
     }
 
