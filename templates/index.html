@@ -163,6 +163,55 @@
                         </div>
                     </div>
                 </div>
+
+                <!-- Daily History Table -->
+                <div class="row mt-5">
+                    <div class="col-12">
+                        <div class="card shadow-sm">
+                            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center flex-wrap gap-3">
+                                <h5 class="mb-0 fw-bold"><i class="bi bi-clock-history me-2"></i>Aircraft Seen Today</h5>
+                                <div class="search-box">
+                                    <div class="input-group">
+                                        <span class="input-group-text bg-transparent border-end-0"><i class="bi bi-filter text-muted"></i></span>
+                                        <input type="text" id="tableSearch" class="form-control border-start-0" placeholder="Filter by Callsign, Hex, or Model...">
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="card-body p-0">
+                                <div class="table-responsive" style="max-height: 600px;">
+                                    <table class="table table-hover mb-0" id="historyTable">
+                                        <thead class="sticky-top bg-dark">
+                                            <tr>
+                                                <th onclick="sortTable(0)">Time Local <i class="bi bi-sort-down ms-1 opacity-50"></i></th>
+                                                <th onclick="sortTable(1)">Hex</th>
+                                                <th onclick="sortTable(2)">Callsign</th>
+                                                <th onclick="sortTable(3)">Reg</th>
+                                                <th onclick="sortTable(4)">Model</th>
+                                                <th onclick="sortTable(5)">Operator</th>
+                                                <th onclick="sortTable(6)">Alt (ft)</th>
+                                                <th onclick="sortTable(7)">Spd (kts)</th>
+                                            </tr>
+                                        </thead>
+                                        <tbody id="historyTableBody">
+                                            {% for row in data %}
+                                            <tr>
+                                                <td class="text-nowrap">{{ row['Time Local'].split(' ')[1] }}</td>
+                                                <td class="fw-bold">{{ row['Hex'] }}</td>
+                                                <td class="fw-bold text-primary">{{ row['Callsign'] }}</td>
+                                                <td>{{ row['Registration'] }}</td>
+                                                <td><small>{{ row['Model'] }}</small></td>
+                                                <td class="text-truncate" style="max-width: 150px;">{{ row['Operator'] }}</td>
+                                                <td>{{ row['Altitude'] }}</td>
+                                                <td>{{ row['Speed'] }}</td>
+                                            </tr>
+                                            {% endfor %}
+                                        </tbody>
+                                    </table>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
                 {% else %}
                 <div class="card p-5 text-center shadow-lg">
                     <div class="display-1 text-muted mb-4"><i class="bi bi-cloud-slash"></i></div>
