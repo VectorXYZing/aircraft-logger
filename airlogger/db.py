@@ -19,6 +19,7 @@ def init_db():
                 callsign TEXT,
                 altitude TEXT,
                 speed TEXT,
+                track TEXT,
                 lat TEXT,
                 lon TEXT,
                 registration TEXT,
@@ -40,13 +41,13 @@ def get_db_connection():
     finally:
         conn.close()
 
-def insert_flight(timestamp_utc, hex_code, callsign, altitude, speed, lat, lon, registration, model, operator):
+def insert_flight(timestamp_utc, hex_code, callsign, altitude, speed, track, lat, lon, registration, model, operator):
     """Insert a flight record into the database."""
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
             INSERT INTO flights (
-                timestamp_utc, hex, callsign, altitude, speed, lat, lon, registration, model, operator
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-        ''', (timestamp_utc, hex_code, callsign, altitude, speed, lat, lon, registration, model, operator))
+                timestamp_utc, hex, callsign, altitude, speed, track, lat, lon, registration, model, operator
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+        ''', (timestamp_utc, hex_code, callsign, altitude, speed, track, lat, lon, registration, model, operator))
         conn.commit()

@@ -262,6 +262,7 @@ def parse_message(message):
         callsign = parts[10].strip() if len(parts) > 10 else ""
         altitude = parts[11].strip() if len(parts) > 11 else ""
         speed = parts[12].strip() if len(parts) > 12 else ""
+        track = parts[13].strip() if len(parts) > 13 else ""
         lat = parts[14].strip() if len(parts) > 14 else ""
         lon = parts[15].strip() if len(parts) > 15 else ""
         
@@ -269,7 +270,7 @@ def parse_message(message):
         if not hex_code:
             return None
             
-        return hex_code, callsign, altitude, speed, lat, lon
+        return hex_code, callsign, altitude, speed, track, lat, lon
     except Exception as e:
         logger.debug(f"Failed to parse message: {e}")
         return None
@@ -295,10 +296,11 @@ def log_aircraft(data):
 
     altitude = data[2]
     speed = data[3]
-    lat = data[4]
-    lon = data[5]
+    track = data[4]
+    lat = data[5]
+    lon = data[6]
 
-    final_data = (callsign, altitude, speed, lat, lon, reg, model, operator)
+    final_data = (callsign, altitude, speed, track, lat, lon, reg, model, operator)
 
     # Check if data has changed since last log
     if last_logged_data.get(hex_code) == final_data:
@@ -312,7 +314,7 @@ def log_aircraft(data):
 
     try:
         # Write to SQLite
-        insert_flight(timestamp, hex_code, callsign, altitude, speed, lat, lon, reg, model, operator)
+        insert_flight(timestamp, hex_code, callsign, altitude, speed, track, lat, lon, reg, model, operator)
         
         # Write to CSV (legacy backup)
         log_handle = ensure_log_file()

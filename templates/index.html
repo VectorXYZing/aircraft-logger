@@ -668,6 +668,7 @@
                 model: ac.model || ac.Model || "",
                 alt: parseFloat(ac.alt || ac.Altitude),
                 speed: parseFloat(ac.speed || ac.Speed),
+                track: parseFloat(ac.track || ac.Track),
                 lat: parseFloat(ac.lat || ac.Latitude),
                 lon: parseFloat(ac.lon || ac.Longitude),
                 time: ac.time || ac["Time Local"] || ""
@@ -700,17 +701,54 @@
                 }).addTo(window.flightMap);
                 mapLayers.push(polyline);
 
-                // 2. Draw small dots at each coordinate
+                // 2. Draw small dots/icons at each coordinate
                 flightPath.forEach((ac, i) => {
                     const isLatest = (i === 0);
-                    const marker = L.circleMarker([ac.lat, ac.lon], {
-                        radius: isLatest ? 5 : 3,
-                        fillColor: color,
-                        color: isLatest ? "#fff" : "transparent",
-                        weight: isLatest ? 2 : 0,
-                        opacity: 1,
-                        fillOpacity: 0.8
-                    }).addTo(window.flightMap);
+                    let marker;
+                    
+                    if (isLatest) {
+                        let heading = ac.track;
+                        if (isNaN(heading) || heading === undefined) {
+                            if (flightPath.length > 1) {
+                                // Calculate heading between last two points
+                                const prev = flightPath[1];
+                                const dy = ac.lon - prev.lon;
+                                const dx = ac.lat - prev.lat;
+                                heading = Math.atan2(dy, dx) * (180 / Math.PI);
+                            } else {
+                                heading = 0; // fallback
+                            }
+                        }
+                        
+                        const iconHtml = `<div style="transform: rotate(${heading}deg); color: ${color}; font-size: 1.5rem; text-shadow: 1px 1px 2px #000;"><i class="bi bi-airplane-fill"></i></div>`;
+                        const planeIcon = L.divIcon({
+                            html: iconHtml,
+                            className: 'custom-plane-icon',
+                            iconSize: [24, 24],
+                            iconAnchor: [12, 12]
+                        });
+                        
+                        marker = L.marker([ac.lat, ac.lon], { icon: planeIcon }).addTo(window.flightMap);
+                        
+                        // Add permanent tooltip for Callsign
+                        if (ac.callsign) {
+                            marker.bindTooltip(`<b>${ac.callsign}</b>`, {
+                                permanent: true, 
+                                direction: 'right',
+                                className: 'bg-transparent border-0 text-white shadow-none fs-6',
+                                offset: [10, 0]
+                            });
+                        }
+                    } else {
+                        marker = L.circleMarker([ac.lat, ac.lon], {
+                            radius: 3,
+                            fillColor: color,
+                            color: "transparent",
+                            weight: 0,
+                            opacity: 1,
+                            fillOpacity: 0.8
+                        }).addTo(window.flightMap);
+                    }
                     
                     let timeStr = ac.time || ac["Time Local"] || "";
                     if (timeStr.includes(' ')) timeStr = timeStr.split(' ')[1];
@@ -736,16 +774,6 @@
 
             if (isLive) {
                 updateLiveList(flightsByHex, colors);
-            } else {
-                const listContainer = document.getElementById('liveAircraftList');
-                if (listContainer) {
-                    listContainer.innerHTML = `
-                        <div class="text-muted text-center mt-5">
-                            <i class="bi bi-info-circle mb-2 d-block fs-3"></i>
-                            Enable 'Live' mode to see active flights.
-                        </div>
-                    `;
-                }
             }
         }
 
@@ -770,30 +798,32 @@
                 const latest = flightPath[0]; // newest ping
                 const color = colors[index % colors.length];
                 
-                let callsignStr = latest.callsign ? `<span class="badge bg-secondary text-white">${latest.callsign}</span>` : '';
+                // Emphasize callsign
+                let displayCallsign = latest.callsign ? `<span class="fw-bold fs-5 text-white">${latest.callsign}</span>` : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
+                
                 let speedAlt = "";
                 if (latest.speed && latest.alt) {
-                    speedAlt = `<small class="text-muted">${latest.speed} kts | ${latest.alt} ft</small>`;
+                    speedAlt = `<small class="text-muted" style="font-size:0.7rem;">${latest.speed}kts | ${latest.alt}ft</small>`;
                 }
                 
                 let timeStr = latest.time || "";
                 if (timeStr.includes(' ')) timeStr = timeStr.split(' ')[1];
                 
                 html += `
-                <div class="list-group-item bg-transparent px-0 border-bottom border-secondary border-opacity-25 py-3">
+                <div class="list-group-item bg-transparent px-2 py-2 border-bottom border-secondary border-opacity-25">
                     <div class="d-flex w-100 justify-content-between align-items-center mb-1">
                         <div class="d-flex align-items-center">
-                            <span style="display:inline-block; width:12px; height:12px; border-radius:50%; background-color:${color}; margin-right:10px;"></span>
-                            <h6 class="mb-0 fw-bold" style="color:var(--bs-body-color)">${latest.hex}</h6>
+                            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:${color}; margin-right:8px;"></span>
+                            ${displayCallsign}
                         </div>
-                        ${callsignStr}
+                        <div class="text-end">
+                            <small class="text-muted d-block" style="font-size: 0.7rem;">Hex: ${latest.hex}</small>
+                            ${speedAlt}
+                        </div>
                     </div>
-                    <div class="d-flex justify-content-between ms-4">
-                        <small class="text-muted text-truncate pe-2" style="max-width: 130px;" title="${latest.model || latest.reg}">${latest.model || latest.reg || 'Unknown Type'}</small>
-                        ${speedAlt}
-                    </div>
-                    <div class="text-end mt-1">
-                        <small class="text-muted" style="font-size: 0.75rem;"><i class="bi bi-clock me-1"></i>${timeStr}</small>
+                    <div class="d-flex justify-content-between ms-3">
+                        <small class="text-muted text-truncate pe-2" style="max-width: 140px; font-size:0.75rem;" title="${latest.model || latest.reg}">${latest.model || latest.reg || 'Unknown Type'}</small>
+                        <small class="text-muted" style="font-size: 0.7rem;"><i class="bi bi-clock me-1"></i>${timeStr}</small>
                     </div>
                 </div>`;
             });
@@ -804,27 +834,69 @@
         // Initialize with server-rendered data
         updateMap(initialAircraftData, false);
 
+        // --- Independent Live Polling logic ---
+        let backgroundListInterval = setInterval(fetchListOnly, 60000);
+        let liveMapInterval = null;
+        let isLiveModeActive = false;
+
+        function fetchListOnly() {
+            if (isLiveModeActive) return; // Map polling handles list updates during live mode
+            fetch('/api/live_flights')
+                .then(response => response.json())
+                .then(data => {
+                    if (data && !data.error) {
+                        const flightsByHex = {};
+                        const normalizedData = data.map(ac => ({
+                            hex: ac.hex || ac.Hex || "UNKNOWN",
+                            callsign: ac.callsign || ac.Callsign || "",
+                            reg: ac.reg || ac.Registration || "",
+                            model: ac.model || ac.Model || "",
+                            alt: parseFloat(ac.alt || ac.Altitude),
+                            speed: parseFloat(ac.speed || ac.Speed),
+                            track: parseFloat(ac.track || ac.Track),
+                            lat: parseFloat(ac.lat || ac.Latitude),
+                            lon: parseFloat(ac.lon || ac.Longitude),
+                            time: ac.time || ac["Time Local"] || ""
+                        }));
+                        normalizedData.forEach(ac => {
+                            if (!isNaN(ac.lat) && !isNaN(ac.lon) && ac.lat !== 0 && ac.lon !== 0) {
+                                if (!flightsByHex[ac.hex]) flightsByHex[ac.hex] = [];
+                                flightsByHex[ac.hex].push(ac);
+                            }
+                        });
+                        const colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
+                        updateLiveList(flightsByHex, colors);
+                    }
+                });
+        }
+        
+        // Fetch list once on page load so it's not empty when live mode is off
+        fetchListOnly();
+
         // --- Live View Logic ---
-        let liveInterval = null;
         const liveBtn = document.getElementById('liveViewToggle');
         
         liveBtn.addEventListener('click', function() {
-            if (liveInterval) {
+            if (liveMapInterval) {
                 // Stop Live View
-                clearInterval(liveInterval);
-                liveInterval = null;
+                clearInterval(liveMapInterval);
+                liveMapInterval = null;
+                isLiveModeActive = false;
                 liveBtn.classList.remove('btn-danger');
                 liveBtn.classList.add('btn-outline-danger');
                 liveBtn.innerHTML = '<i class="bi bi-record-circle me-1"></i> Live';
                 updateMap(initialAircraftData, false);
+                // Also trigger one list update right away
+                fetchListOnly();
             } else {
                 // Start Live View
+                isLiveModeActive = true;
                 liveBtn.classList.remove('btn-outline-danger');
                 liveBtn.classList.add('btn-danger');
                 liveBtn.innerHTML = '<i class="bi bi-broadcast me-1 pulse-icon"></i> Live Active';
                 
                 fetchLiveFlights();
-                liveInterval = setInterval(fetchLiveFlights, 5000);
+                liveMapInterval = setInterval(fetchLiveFlights, 5000);
             }
         });
 
