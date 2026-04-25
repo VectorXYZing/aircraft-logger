@@ -145,7 +145,7 @@ class AircraftDashboard {
 
     createPopup(ac, color) {
         let timeStr = (ac.time || "").split(' ')[1] || "";
-        const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${ac.callsign}`;
+        const fr24Url = `https://www.flightradar24.com/${ac.reg || ac.callsign || ac.hex}`;
         
         return `<div style="font-family:'Outfit',sans-serif; min-width: 200px;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -191,7 +191,7 @@ class AircraftDashboard {
         hexes.forEach((hex, idx) => {
             const ac = flightsByHex[hex][0];
             const color = this.colors[idx % this.colors.length];
-            const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${ac.callsign}`;
+            const fr24Url = `https://www.flightradar24.com/${ac.reg || ac.callsign || ac.hex}`;
             const callsign = ac.callsign 
                 ? `<a href="${fr24Url}" target="_blank" class="fw-bold fs-5 text-primary text-decoration-none" onclick="event.stopPropagation();">${ac.callsign}</a>` 
                 : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
