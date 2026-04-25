@@ -1036,8 +1036,20 @@
         });
 
         // 4. Altitude vs Speed Scatter Plot
-        const scatterData = initialAircraftData
-            .filter(ac => !isNaN(ac.speed) && !isNaN(ac.alt) && ac.speed > 0 && ac.alt > 0)
+        // ADS-B messages often separate speed and altitude into different pings, 
+        // so we aggregate the maximum speed and altitude seen for each aircraft today.
+        const aircraftStats = {};
+        initialAircraftData.forEach(ac => {
+            if (!aircraftStats[ac.hex]) {
+                aircraftStats[ac.hex] = { speed: 0, alt: 0, model: ac.model, hex: ac.hex };
+            }
+            if (!isNaN(ac.speed) && ac.speed > aircraftStats[ac.hex].speed) aircraftStats[ac.hex].speed = ac.speed;
+            if (!isNaN(ac.alt) && ac.alt > aircraftStats[ac.hex].alt) aircraftStats[ac.hex].alt = ac.alt;
+            if (ac.model && !aircraftStats[ac.hex].model) aircraftStats[ac.hex].model = ac.model;
+        });
+
+        const scatterData = Object.values(aircraftStats)
+            .filter(ac => ac.speed > 0 && ac.alt > 0)
             .map(ac => ({
                 x: ac.speed,
                 y: ac.alt,
