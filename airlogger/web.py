@@ -3,13 +3,18 @@ from collections import Counter
 from datetime import datetime, time as dt_time, timedelta
 from flask import Blueprint, render_template, request
 from airlogger.db import get_db_connection
-from airlogger.utils import convert_to_local, LOCAL_TZ
+from airlogger.utils import convert_to_local, LOCAL_TZ, get_fr24_callsign
 from airlogger.config import VERSION, HEALTH_THRESHOLD, HEARTBEAT_FILE
 import os
 import json
 import time
 
 web_bp = Blueprint('web', __name__)
+
+@web_bp.app_template_filter('fr24_callsign')
+def fr24_callsign_filter(s):
+    return get_fr24_callsign(s)
+
 logger = logging.getLogger(__name__)
 
 def load_historical_data(target_date_str):

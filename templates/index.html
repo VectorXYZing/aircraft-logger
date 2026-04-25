@@ -49,6 +49,9 @@
                             </button>
                         </form>
                         <div class="vr mx-2 text-muted"></div>
+                        <button type="button" id="weatherToggle" onclick="window.dashboard.toggleWeather()" class="btn btn-outline-primary rounded-pill px-4">
+                            <i class="bi bi-cloud-rain me-1"></i> Weather
+                        </button>
                         <button type="button" id="liveViewToggle" class="btn btn-outline-danger rounded-pill px-4 fw-bold">
                             <i class="bi bi-record-circle me-1"></i> Live
                         </button>
@@ -203,9 +206,7 @@
                                                     </a>
                                                 </td>
                                                 <td>
-                                                    {% set c = row['Callsign'] if row['Callsign'] else '' %}
-                                                    {% set clean_c = c.replace('QFA', 'QF').replace('JST', 'JQ').replace('VOZ', 'VA').replace('ANZ', 'NZ') %}
-                                                    <a href="https://www.flightradar24.com/data/flights/{{ clean_c if clean_c else row['Hex'] }}" 
+                                                    <a href="https://www.flightradar24.com/data/flights/{{ row['Callsign']|fr24_callsign if row['Callsign'] else row['Hex'] }}" 
                                                        target="_blank" class="fw-bold text-primary text-decoration-none" onclick="event.stopPropagation();">
                                                         {{ row['Callsign'] }}
                                                     </a>

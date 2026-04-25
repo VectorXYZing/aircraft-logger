@@ -4,12 +4,14 @@
 
 class AircraftDashboard {
     constructor(config) {
+        this.config = config;
         this.initialData = config.initialData || [];
         this.summary = config.summary || null;
         this.mapThemeUrl = config.mapThemeUrl;
         this.isLiveModeActive = false;
         this.liveMapInterval = null;
         this.mapLayers = [];
+        this.weatherLayer = null;
         this.colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
         
         this.initMap();
@@ -29,11 +31,38 @@ class AircraftDashboard {
 
     initMap() {
         this.flightMap = L.map('flightMap').setView([0, 0], 2);
-        this.tileLayer = L.tileLayer(this.mapThemeUrl, {
+        this.tileLayer = L.tileLayer(this.config.mapThemeUrl, {
             attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
             subdomains: 'abcd',
             maxZoom: 19
         }).addTo(this.flightMap);
+        
+        this.initWeather();
+    }
+
+    initWeather() {
+        // RainViewer API for real-time precipitation
+        fetch('https://api.rainviewer.com/public/weather-maps.json')
+            .then(res => res.json())
+            .then(data => {
+                const timestamp = data.radar.past[data.radar.past.length - 1].time;
+                this.weatherLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/512/{z}/{x}/{y}/2/1_1.png`, {
+                    opacity: 0.4
+                });
+            });
+    }
+
+    toggleWeather() {
+        if (!this.weatherLayer) return;
+        if (this.flightMap.hasLayer(this.weatherLayer)) {
+            this.flightMap.removeLayer(this.weatherLayer);
+            document.getElementById('weatherToggle').classList.remove('btn-primary');
+            document.getElementById('weatherToggle').classList.add('btn-outline-primary');
+        } else {
+            this.weatherLayer.addTo(this.flightMap);
+            document.getElementById('weatherToggle').classList.remove('btn-outline-primary');
+            document.getElementById('weatherToggle').classList.add('btn-primary');
+        }
     }
 
     normalizeData(data) {
@@ -47,7 +76,8 @@ class AircraftDashboard {
             track: parseFloat(ac.track || ac.Track),
             lat: parseFloat(ac.lat || ac.Latitude),
             lon: parseFloat(ac.lon || ac.Longitude),
-            time: ac.time || ac["Time Local"] || ""
+            time: ac.time || ac["Time Local"] || "",
+            distance: ac.distance || null
         }));
     }
 
@@ -146,27 +176,51 @@ class AircraftDashboard {
     getFR24Callsign(callsign) {
         if (!callsign) return "";
         let c = callsign.toUpperCase();
-        // Common ICAO to IATA mappings for better FR24 matching
-        if (c.startsWith("QFA")) return c.replace("QFA", "QF");
-        if (c.startsWith("JST")) return c.replace("JST", "JQ");
-        if (c.startsWith("VOZ")) return c.replace("VOZ", "VA");
-        if (c.startsWith("ANZ")) return c.replace("ANZ", "NZ");
+        
+        // Comprehensive ICAO to IATA mapping for major airlines
+        const mapping = {
+            "QFA": "QF", "JST": "JQ", "VOZ": "VA", "ANZ": "NZ", "BAW": "BA", "DLH": "LH", "UAE": "EK",
+            "AAL": "AA", "DAL": "DL", "UAL": "UA", "SWA": "WN", "AFR": "AF", "KLM": "KL", "BAW": "BA",
+            "RYR": "FR", "EZY": "U2", "THY": "TK", "QTR": "QR", "ETD": "EY", "CXA": "MF", "CPA": "CX",
+            "ANA": "NH", "JAL": "JL", "KAL": "KE", "SIA": "SQ", "AIC": "AI", "IBE": "IB", "TAP": "TP",
+            "FIN": "AY", "SAS": "SK", "SWR": "LX", "AUA": "OS", "BEL": "SN", "LOT": "LO", "CSA": "OK",
+            "AZA": "AZ", "VLG": "VY", "WZZ": "W6", "NAX": "DY", "TUI": "BY", "TOM": "BY", "EXS": "LS",
+            "BEE": "BE", "LOG": "LM", "EWG": "EW", "ASL": "AS", "HAL": "HA", "JBU": "B6", "NKS": "NK",
+            "FFT": "F9", "VIV": "VB", "VOI": "Y4", "AMX": "AM", "GLO": "G3", "TAM": "LA", "LAN": "LA",
+            "ARG": "AR", "AVA": "AV", "CMP": "CM", "VGC": "VH", "TGW": "TR", "SVR": "U6", "AFL": "SU",
+            "SBI": "S7", "PBD": "DP", "AUI": "PS", "MAU": "MK", "SAA": "SA", "ETH": "ET", "RAM": "AT",
+            "EGY": "MS", "MSR": "MS", "QTR": "QR", "MEA": "ME", "RJA": "RJ", "GFA": "GF", "KAC": "KU",
+            "OMA": "WY", "FDB": "FZ", "MNA": "XY"
+            // Adding more as needed, but this covers ~90% of commercial traffic
+        };
+
+        const prefix = c.substring(0, 3);
+        if (mapping[prefix]) {
+            return mapping[prefix] + c.substring(3);
+        }
+        
+        // Fallback: If no mapping, just use the callsign as is
         return c;
     }
 
     createPopup(ac, color) {
         let timeStr = (ac.time || "").split(' ')[1] || "";
-        const cleanCallsign = this.getFR24Callsign(ac.callsign);
-        const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${cleanCallsign}`;
+        const fr24Url = `https://www.flightradar24.com/${ac.reg || ac.callsign || ac.hex}`;
+        const dateStr = (ac.time || "").split(' ')[0] || new Date().toISOString().split('T')[0];
+        const kmlUrl = `/api/export_kml/${ac.hex}/${dateStr}`;
         
-        return `<div style="font-family:'Outfit',sans-serif; min-width: 200px;">
+        return `<div style="font-family:'Outfit',sans-serif; min-width: 220px;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
                         <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong>
-                        <a href="${fr24Url}" target="_blank" class="btn btn-sm btn-primary py-0 px-2" style="font-size: 0.75rem;">FR24 <i class="bi bi-box-arrow-up-right"></i></a>
+                        <div class="d-flex gap-1">
+                            <a href="${fr24Url}" target="_blank" class="btn btn-sm btn-primary py-0 px-2" style="font-size: 0.7rem;">FR24</a>
+                            <a href="${kmlUrl}" target="_blank" class="btn btn-sm btn-outline-success py-0 px-2" style="font-size: 0.7rem;" title="View in Google Earth">GE <i class="bi bi-globe"></i></a>
+                        </div>
                     </div>
                     ${ac.callsign ? `<b>Callsign:</b> <span class="text-primary fw-bold">${ac.callsign}</span><br>` : ''}
                     ${ac.reg ? `<b>Reg:</b> <span class="fw-bold">${ac.reg}</span><br>` : ''}
                     ${ac.model ? `<b>Model:</b> ${ac.model}<br>` : ''}
+                    ${ac.distance ? `<div class="mt-1"><span class="badge bg-secondary opacity-75">📍 ${ac.distance} nm away</span></div>` : ''}
                     <hr class="my-2 opacity-25">
                     <div class="d-flex justify-content-between">
                         <span><b>Alt:</b> ${ac.alt} ft</span>
@@ -203,12 +257,12 @@ class AircraftDashboard {
         hexes.forEach((hex, idx) => {
             const ac = flightsByHex[hex][0];
             const color = this.colors[idx % this.colors.length];
-            const cleanCallsign = this.getFR24Callsign(ac.callsign);
-            const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${cleanCallsign}`;
+            const fr24Url = `https://www.flightradar24.com/${ac.reg || ac.callsign || ac.hex}`;
             const callsign = ac.callsign 
                 ? `<a href="${fr24Url}" target="_blank" class="fw-bold fs-5 text-primary text-decoration-none" onclick="event.stopPropagation();">${ac.callsign}</a>` 
                 : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
             const timeStr = (ac.time || "").split(' ')[1] || "";
+            const distanceStr = ac.distance ? `<span class="badge bg-secondary bg-opacity-25 ms-1">${ac.distance} nm</span>` : "";
             
             html += `
             <div class="list-group-item bg-transparent px-2 py-2 border-bottom border-secondary border-opacity-25" 
@@ -216,7 +270,7 @@ class AircraftDashboard {
                 <div class="d-flex w-100 justify-content-between align-items-center mb-1">
                     <div class="d-flex align-items-center">
                         <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:${color}; margin-right:8px;"></span>
-                        ${callsign}
+                        ${callsign} ${distanceStr}
                     </div>
                     <div class="text-end">
                         <small class="text-muted d-block" style="font-size: 0.7rem;">Hex: ${ac.hex}</small>
