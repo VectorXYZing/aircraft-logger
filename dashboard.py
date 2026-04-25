@@ -130,6 +130,17 @@ def load_and_filter_data(target_date_str):
                 if not local_time or local_time.date() != target_date:
                     continue
                 
+                # Data Sanity Check: Filter out obviously erroneous data
+                # 80k+ feet is usually a decoding error for commercial traffic.
+                # Speed 0 often refers to parked aircraft or ground stations.
+                try:
+                    alt_val = int(row['altitude']) if row['altitude'] else 0
+                    speed_val = int(row['speed']) if row['speed'] else 0
+                    if alt_val > 60000 or (speed_val == 0 and alt_val == 0):
+                        continue
+                except (ValueError, TypeError):
+                    pass
+
                 row_dict = {
                     "Time Local": local_time.strftime("%Y-%m-%d %H:%M:%S"),
                     "Hex": row['hex'].upper() if row['hex'] else "",
@@ -267,6 +278,15 @@ def api_live_flights():
                 if not local_time:
                     continue
                 
+                # Data Sanity Check: Filter out obviously erroneous data
+                try:
+                    alt_val = int(row['altitude']) if row['altitude'] else 0
+                    speed_val = int(row['speed']) if row['speed'] else 0
+                    if alt_val > 60000 or (speed_val == 0 and alt_val == 0):
+                        continue
+                except (ValueError, TypeError):
+                    pass
+
                 row_dict = {
                     "Time Local": local_time.strftime("%Y-%m-%d %H:%M:%S"),
                     "Hex": row['hex'].upper() if row['hex'] else "",
