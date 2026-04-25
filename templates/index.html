@@ -1,281 +1,32 @@
 <!DOCTYPE html>
-<html lang="en" data-bs-theme="light">
+<html lang="en" data-bs-theme="dark">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Aircraft Logger Dashboard</title>
+    <title>Aircraft Logger | Dashboard</title>
     
+    <!-- Favicon -->
     <link rel="icon" type="image/svg+xml" href="{{ url_for('static', filename='favicon.svg') }}">
-    
+
     <!-- Google Fonts -->
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&display=swap" rel="stylesheet">
     
-    <!-- Bootstrap CSS -->
+    <!-- Libraries -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <!-- Bootstrap Icons -->
     <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.5/font/bootstrap-icons.css" rel="stylesheet">
-    <!-- Leaflet CSS -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    
-    <!-- Chart.js -->
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 
-    <style>
-        :root {
-            --bs-body-font-family: 'Outfit', system-ui, -apple-system, sans-serif;
-            --glass-bg: rgba(255, 255, 255, 0.75);
-            --glass-border: rgba(255, 255, 255, 0.4);
-            --glass-shadow: 0 8px 32px 0 rgba(31, 38, 135, 0.07);
-            --bg-gradient: linear-gradient(135deg, #e0c3fc 0%, #8ec5fc 100%);
-            --text-main: #2c3e50;
-            --scroll-indicator-bg: #fff;
-        }
-        
-        [data-bs-theme="dark"] {
-            --glass-bg: rgba(20, 25, 30, 0.75);
-            --glass-border: rgba(255, 255, 255, 0.05);
-            --glass-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.4);
-            --bg-gradient: linear-gradient(135deg, #0f2027 0%, #203a43 50%, #2c5364 100%);
-            --text-main: #f8f9fa;
-            --scroll-indicator-bg: #14191e;
-        }
-        
-        body {
-            background: var(--bg-gradient);
-            background-attachment: fixed;
-            min-height: 100vh;
-            color: var(--text-main);
-            transition: background 0.5s ease;
-        }
-
-        .card {
-            background: var(--glass-bg);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid var(--glass-border);
-            box-shadow: var(--glass-shadow);
-            border-radius: 1.25rem;
-            transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275), box-shadow 0.3s ease;
-            overflow: hidden;
-        }
-
-        .card:hover {
-            transform: translateY(-4px);
-            box-shadow: 0 12px 40px 0 rgba(31, 38, 135, 0.15);
-        }
-
-        [data-bs-theme="dark"] .card:hover {
-            box-shadow: 0 12px 40px 0 rgba(0, 0, 0, 0.6);
-        }
-
-        .stat-card .card-body {
-            padding: 1.75rem;
-            position: relative;
-            z-index: 1;
-        }
-
-        /* Create a gradient overlay for stat cards */
-        .stat-card::before {
-            content: '';
-            position: absolute;
-            top: 0; left: 0; right: 0; bottom: 0;
-            opacity: 0.85;
-            z-index: 0;
-        }
-
-        .stat-card.bg-primary::before { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); }
-        .stat-card.bg-success::before { background: linear-gradient(135deg, #43e97b 0%, #38f9d7 100%); }
-        .stat-card.bg-info::before { background: linear-gradient(135deg, #4facfe 0%, #00f2fe 100%); }
-        .stat-card.bg-danger::before { background: linear-gradient(135deg, #ff0844 0%, #ffb199 100%); }
-
-        .stat-card.bg-primary, .stat-card.bg-success, .stat-card.bg-info, .stat-card.bg-danger {
-            background: transparent !important; /* override bootstrap */
-            color: #fff !important;
-            border: none;
-        }
-
-        .stat-value {
-            font-size: 2.8rem;
-            font-weight: 700;
-            line-height: 1;
-            margin-bottom: 0.5rem;
-        }
-
-        .stat-label {
-            font-size: 0.9rem;
-            text-transform: uppercase;
-            letter-spacing: 0.1em;
-            font-weight: 500;
-            opacity: 0.9;
-        }
-
-        .table-responsive {
-            border-radius: 0.75rem;
-        }
-
-        .table {
-            --bs-table-bg: transparent;
-            --bs-table-color: var(--text-main);
-            margin-bottom: 0;
-        }
-
-        .table th {
-            font-weight: 600;
-            text-transform: uppercase;
-            font-size: 0.75rem;
-            letter-spacing: 0.05em;
-            border-bottom-width: 2px;
-            cursor: pointer;
-            transition: color 0.2s;
-        }
-        
-        .table th:hover {
-            color: var(--bs-primary);
-        }
-
-        .table td, .table th {
-            padding: 1rem 0.75rem;
-            vertical-align: middle;
-        }
-
-        .table-hover tbody tr {
-            transition: background-color 0.2s ease, transform 0.2s ease;
-        }
-
-        .table-hover tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.4);
-            transform: scale(1.005);
-        }
-
-        [data-bs-theme="dark"] .table-hover tbody tr:hover {
-            background-color: rgba(255, 255, 255, 0.05);
-        }
-
-        .search-box {
-            max-width: 300px;
-        }
-        
-        .search-box .form-control {
-            border-radius: 2rem;
-            padding-left: 1.2rem;
-            background-color: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            color: var(--text-main);
-        }
-
-        .search-box .form-control:focus {
-            box-shadow: 0 0 0 0.25rem rgba(13, 110, 253, 0.25);
-            border-color: #86b7fe;
-        }
-
-        /* Date Picker styling */
-        input[type="date"].form-control {
-            background-color: var(--glass-bg);
-            border: 1px solid var(--glass-border);
-            color: var(--text-main);
-            border-radius: 0.5rem;
-        }
-
-        .btn-primary {
-            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
-            border: none;
-            box-shadow: 0 4px 15px rgba(118, 75, 162, 0.3);
-            transition: transform 0.2s, box-shadow 0.2s;
-        }
-
-        .btn-primary:hover {
-            transform: translateY(-2px);
-            box-shadow: 0 6px 20px rgba(118, 75, 162, 0.4);
-        }
-
-        .loading {
-            position: fixed;
-            top: 0; left: 0; right: 0; bottom: 0;
-            background: rgba(0, 0, 0, 0.6);
-            backdrop-filter: blur(5px);
-            -webkit-backdrop-filter: blur(5px);
-            display: none;
-            justify-content: center;
-            align-items: center;
-            z-index: 9999;
-        }
-
-        .loading.active {
-            display: flex;
-        }
-
-        .theme-switch {
-            position: fixed;
-            top: 1.5rem;
-            right: 1.5rem;
-            z-index: 1000;
-            border-radius: 50%;
-            width: 45px;
-            height: 45px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            background: var(--glass-bg);
-            backdrop-filter: blur(10px);
-            border: 1px solid var(--glass-border);
-            color: var(--text-main);
-            box-shadow: var(--glass-shadow);
-            transition: all 0.3s ease;
-        }
-        
-        .theme-switch:hover {
-            transform: scale(1.1) rotate(15deg);
-        }
-
-        .table-scroll-indicator {
-            position: absolute;
-            right: 0;
-            top: 0;
-            height: 100%;
-            width: 40px;
-            background: linear-gradient(to left, var(--scroll-indicator-bg) 30%, transparent 100%);
-            pointer-events: none;
-            z-index: 10;
-            opacity: 0.8;
-        }
-
-        .registration-col {
-            min-width: 130px;
-            white-space: nowrap;
-        }
-
-        /* Map Container */
-        #flightMap {
-            height: 450px; 
-            border-radius: 1rem; 
-            z-index: 1;
-            box-shadow: inset 0 0 10px rgba(0,0,0,0.1);
-        }
-
-        .pulse-icon {
-            animation: pulse 2s infinite;
-        }
-
-        @keyframes pulse {
-            0% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-            100% { transform: scale(1); }
-        }
-
-    </style>
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/style.css') }}">
 </head>
 <body>
     <button class="theme-switch" onclick="toggleTheme()" aria-label="Toggle Theme">
         <i class="bi bi-moon-stars-fill fs-5"></i>
     </button>
-
-    <div class="loading">
-        <div class="spinner-border text-light" style="width: 3rem; height: 3rem;" role="status">
-            <span class="visually-hidden">Loading...</span>
-        </div>
-    </div>
 
     <div class="container-fluid py-5 px-md-5">
         <div class="row justify-content-center">
@@ -283,13 +34,13 @@
                 
                 <!-- Header Section -->
                 <div class="text-center mb-5">
-                    <h1 class="display-4 fw-bold mb-2" style="letter-spacing: -1px;">🛫 Aircraft Logger</h1>
+                    <h1 class="display-4 fw-bold mb-2">🛫 Aircraft Logger</h1>
                     <p class="lead opacity-75 mb-0">Dashboard v{{ version }}</p>
                 </div>
 
-                <!-- Date Selector and Live View -->
+                <!-- Controls -->
                 <div class="card p-3 mb-5 mx-auto shadow-sm" style="max-width: 550px; border-radius: 3rem;">
-                    <div class="d-flex justify-content-between align-items-center gap-3 m-0">
+                    <div class="d-flex justify-content-between align-items-center gap-3">
                         <form method="get" class="d-flex align-items-center gap-2 flex-grow-1 m-0">
                             <input type="date" name="date" class="form-control border-0 bg-transparent shadow-none"
                                    value="{{ selected_date }}" max="{{ max_date }}" style="font-size: 1.1rem; font-weight: 500;">
@@ -305,7 +56,7 @@
                 </div>
 
                 {% if summary %}
-                <!-- Statistics Cards -->
+                <!-- Stats Row -->
                 <div class="row g-4 mb-5">
                     <div class="col-sm-6 col-lg-3">
                         <div class="card stat-card bg-primary h-100">
@@ -324,7 +75,7 @@
                         </div>
                     </div>
                     <div class="col-sm-6 col-lg-3">
-                        <div class="card stat-card bg-info h-100">
+                        <div class="col card stat-card bg-info h-100">
                             <div class="card-body">
                                 <div class="stat-value">{{ summary.top_operators|length }}</div>
                                 <div class="stat-label">Top Operators</div>
@@ -341,761 +92,144 @@
                                         <i class="bi bi-exclamation-triangle-fill"></i>
                                     {% endif %}
                                 </div>
-                                <div class="stat-label">Logger Health</div>
-                                <div class="small mt-1 fw-bold opacity-75">
-                                    {% if health_status.healthy %}
-                                        Healthy ({{ health_status.age_seconds }}s ago)
-                                    {% else %}
-                                        Offline{% if health_status.age_seconds %} ({{ health_status.age_seconds }}s ago){% endif %}
-                                    {% endif %}
-                                </div>
+                                <div class="stat-label">Logger Status: {{ 'Healthy' if health_status.healthy else 'Offline' }}</div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Map and Live List Section -->
-                <div class="row g-4 mb-5" id="mapSection">
+                <!-- Main Content Row -->
+                <div class="row g-4 mb-5">
+                    <!-- Map Column -->
                     <div class="col-lg-8">
                         <div class="card h-100">
+                            <div class="card-header bg-transparent border-0 pt-4 px-4 d-flex justify-content-between align-items-center">
+                                <h5 class="mb-0 fw-bold"><i class="bi bi-map me-2"></i>Flight Paths</h5>
+                                <span class="badge bg-secondary rounded-pill opacity-75">{{ selected_date }}</span>
+                            </div>
                             <div class="card-body p-4">
-                                <h4 class="card-title fw-bold mb-4">🗺️ Flight Paths</h4>
                                 <div id="flightMap"></div>
                             </div>
                         </div>
                     </div>
+                    <!-- Live List Column -->
                     <div class="col-lg-4">
                         <div class="card h-100">
-                            <div class="card-body p-4 d-flex flex-column">
-                                <h4 class="card-title fw-bold mb-4">📡 Live Aircraft</h4>
-                                <div id="liveAircraftList" class="flex-grow-1 overflow-auto pe-2" style="max-height: 500px;">
-                                    <div class="text-muted text-center mt-5">
-                                        <i class="bi bi-info-circle mb-2 d-block fs-3"></i>
-                                        Enable 'Live' mode to see active flights.
-                                    </div>
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                                <h5 class="mb-0 fw-bold"><i class="bi bi-list-task me-2"></i>Active Aircraft</h5>
+                            </div>
+                            <div class="card-body p-0" style="max-height: 400px; overflow-y: auto;" id="liveAircraftList">
+                                <div class="p-4 text-center text-muted">
+                                    <div class="spinner-border spinner-border-sm me-2" role="status"></div>
+                                    Loading active flights...
                                 </div>
                             </div>
                         </div>
                     </div>
                 </div>
 
-                <!-- Advanced Analytics Charts Section -->
-                <div class="row g-4 mb-5">
+                <!-- Charts Row -->
+                <div class="row g-4">
                     <div class="col-lg-6">
                         <div class="card h-100">
-                            <div class="card-body p-4">
-                                <h4 class="card-title fw-bold mb-4">📈 Activity Timeline</h4>
-                                <div style="height: 300px; position: relative;">
-                                    <canvas id="timelineChart"></canvas>
-                                </div>
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                                <h5 class="mb-0 fw-bold">Top Operators</h5>
                             </div>
+                            <div class="card-body"><canvas id="operatorsChart"></canvas></div>
                         </div>
                     </div>
                     <div class="col-lg-6">
                         <div class="card h-100">
-                            <div class="card-body p-4">
-                                <h4 class="card-title fw-bold mb-4">🚀 Altitude vs Speed</h4>
-                                <div style="height: 300px; position: relative;">
-                                    <canvas id="scatterChart"></canvas>
-                                </div>
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                                <h5 class="mb-0 fw-bold">Aircraft Models</h5>
                             </div>
+                            <div class="card-body"><canvas id="modelsChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                                <h5 class="mb-0 fw-bold">Activity Timeline</h5>
+                            </div>
+                            <div class="card-body"><canvas id="timelineChart"></canvas></div>
+                        </div>
+                    </div>
+                    <div class="col-lg-6">
+                        <div class="card h-100">
+                            <div class="card-header bg-transparent border-0 pt-4 px-4">
+                                <h5 class="mb-0 fw-bold">Performance (kts vs ft)</h5>
+                            </div>
+                            <div class="card-body"><canvas id="scatterChart"></canvas></div>
                         </div>
                     </div>
                 </div>
-
-                <!-- Existing Charts Section -->
-                <div class="row g-4 mb-5">
-                    <div class="col-lg-7">
-                        <div class="card h-100">
-                            <div class="card-body p-4">
-                                <h4 class="card-title fw-bold mb-4">🏢 Top Operators</h4>
-                                <div style="height: 300px; position: relative;">
-                                    <canvas id="operatorsChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                    <div class="col-lg-5">
-                        <div class="card h-100">
-                            <div class="card-body p-4">
-                                <h4 class="card-title fw-bold mb-4">✈️ Model Distribution</h4>
-                                <div style="height: 300px; position: relative; display: flex; justify-content: center;">
-                                    <canvas id="modelsChart"></canvas>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
+                {% else %}
+                <div class="card p-5 text-center shadow-lg">
+                    <div class="display-1 text-muted mb-4"><i class="bi bi-cloud-slash"></i></div>
+                    <h3>No Data Available</h3>
+                    <p class="text-muted">No flight logs found for {{ selected_date }}.</p>
                 </div>
                 {% endif %}
-
-                <!-- Data Table -->
-                <div class="card mb-5">
-                    <div class="card-body p-4">
-                        <div class="d-flex flex-column flex-md-row justify-content-between align-items-md-center mb-4 gap-3">
-                            <div>
-                                <h4 class="card-title fw-bold mb-1">📋 Aircraft Activity</h4>
-                                <p class="text-muted small mb-0">Showing records for {{ selected_date }}</p>
-                            </div>
-                            <div class="search-box">
-                                <input type="text" class="form-control" id="searchInput" placeholder="Search Hex, Callsign, Reg...">
-                            </div>
-                        </div>
-
-                        <div class="table-responsive position-relative">
-                            <div class="table-scroll-indicator d-md-none"></div>
-                            <table class="table table-hover align-middle" id="aircraftTable">
-                                <thead>
-                                    <tr>
-                                        <th onclick="sortTable(0)">Time <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(1)">Hex <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(2)">Callsign <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(3)">Altitude <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(4)">Speed <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(5)">Lat <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(6)">Lon <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(7)" class="registration-col">Reg <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(8)">Model <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                        <th onclick="sortTable(9)">Operator <i class="bi bi-chevron-expand ms-1 text-muted"></i></th>
-                                    </tr>
-                                </thead>
-                                <tbody>
-                                    {% for row in data %}
-                                    <tr>
-                                        <td class="fw-medium text-nowrap">{{ row["Time Local"][-8:] }}</td> <!-- Just showing time part for cleaner UI -->
-                                        <td class="font-monospace text-muted">{{ row["Hex"] }}</td>
-                                        <td class="fw-bold">{{ row["Callsign"] }}</td>
-                                        <td>
-                                            {% if row["Altitude"] %}
-                                            <span class="badge bg-secondary bg-opacity-25 text-body rounded-pill px-2 py-1">{{ row["Altitude"] }} ft</span>
-                                            {% endif %}
-                                        </td>
-                                        <td>
-                                            {% if row["Speed"] %}
-                                            {{ row["Speed"] }} <small class="text-muted">kts</small>
-                                            {% endif %}
-                                        </td>
-                                        <td class="small">{{ row["Latitude"] }}</td>
-                                        <td class="small">{{ row["Longitude"] }}</td>
-                                        <td class="registration-col">
-                                            {% if row.get("Registration") %}
-                                            <a href="https://www.flightradar24.com/data/aircraft/{{ row.get('Registration') }}"
-                                               target="_blank"
-                                               class="btn btn-sm btn-primary rounded-pill d-inline-flex align-items-center px-3"
-                                               style="font-size: 0.8rem; font-weight: 600;">
-                                              <i class="bi bi-airplane-fill me-2"></i> {{ row.get("Registration") }}
-                                            </a>
-                                            {% endif %}
-                                        </td>
-                                        <td class="small fw-medium">{{ row.get("Model", "") }}</td>
-                                        <td class="small text-truncate" style="max-width: 150px;" title="{{ row.get('Operator', '') }}">{{ row.get("Operator", "") }}</td>
-                                    </tr>
-                                    {% endfor %}
-                                </tbody>
-                            </table>
-                            {% if not data %}
-                            <div class="text-center py-5 text-muted">
-                                <i class="bi bi-inbox fs-1 d-block mb-3"></i>
-                                <h5>No aircraft data found for this date.</h5>
-                            </div>
-                            {% endif %}
-                        </div>
-                    </div>
-                </div>
-
             </div>
         </div>
     </div>
 
-    <!-- Scripts -->
-    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-
+    <!-- Initialization Script -->
+    <script src="{{ url_for('static', filename='js/app.js') }}"></script>
     <script>
-        // --- Theme Switching ---
         function toggleTheme() {
             const html = document.documentElement;
-            const isDark = html.getAttribute('data-bs-theme') === 'dark';
-            const newTheme = isDark ? 'light' : 'dark';
-            html.setAttribute('data-bs-theme', newTheme);
-            localStorage.setItem('theme', newTheme);
-            updateThemeIcon(newTheme);
+            const current = html.getAttribute('data-bs-theme');
+            const next = current === 'dark' ? 'light' : 'dark';
+            html.setAttribute('data-bs-theme', next);
+            localStorage.setItem('theme', next);
             
-            // Reload map tiles if map exists
-            if (window.flightMap && window.tileLayer) {
-                const url = newTheme === 'dark' 
-                    ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-                    : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-                window.tileLayer.setUrl(url);
+            // Re-render map layer
+            const mapThemeUrl = next === 'dark' 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+            if (window.dashboard) {
+                window.dashboard.tileLayer.setUrl(mapThemeUrl);
+                window.dashboard.updateChartColors();
+                // Redraw charts
+                if (window.dashboard.opChart) window.dashboard.opChart.update();
             }
         }
 
-        function updateThemeIcon(theme) {
-            const icon = document.querySelector('.theme-switch i');
-            if(theme === 'dark') {
-                icon.className = 'bi bi-sun-fill fs-5';
-            } else {
-                icon.className = 'bi bi-moon-stars-fill fs-5';
-            }
-        }
-
-        // Initialize Theme
-        const savedTheme = localStorage.getItem('theme') || 'light';
+        // Apply saved theme
+        const savedTheme = localStorage.getItem('theme') || 'dark';
         document.documentElement.setAttribute('data-bs-theme', savedTheme);
-        updateThemeIcon(savedTheme);
 
-
-        // --- Table Sorting ---
-        function sortTable(n) {
-            const table = document.getElementById("aircraftTable");
-            const tbody = table.querySelector("tbody");
-            const rows = Array.from(tbody.querySelectorAll("tr"));
-            let dir = table.getAttribute("data-sort-dir") === "asc" ? "desc" : "asc";
-            table.setAttribute("data-sort-dir", dir);
-
-            rows.sort((a, b) => {
-                let x = a.cells[n].textContent.trim();
-                let y = b.cells[n].textContent.trim();
-
-                // Custom sorting logic for numbers/times
-                if (n === 0) { // Time
-                    x = x.replace(/[^0-9:]/g, '');
-                    y = y.replace(/[^0-9:]/g, '');
-                } else {
-                    let xNum = parseFloat(x.replace(/[^0-9.-]+/g,""));
-                    let yNum = parseFloat(y.replace(/[^0-9.-]+/g,""));
-                    if (!isNaN(xNum) && !isNaN(yNum) && x !== "" && y !== "") {
-                        x = xNum;
-                        y = yNum;
-                    } else {
-                        x = x.toLowerCase();
-                        y = y.toLowerCase();
-                    }
-                }
-
-                return dir === "asc" ? (x < y ? -1 : x > y ? 1 : 0) : (x > y ? -1 : x < y ? 1 : 0);
-            });
-
-            rows.forEach(row => tbody.appendChild(row));
-            
-            // Update chevron icons
-            const headers = table.querySelectorAll("th i");
-            headers.forEach(i => i.className = "bi bi-chevron-expand ms-1 text-muted");
-            const activeIcon = table.querySelectorAll("th")[n].querySelector("i");
-            activeIcon.className = dir === "asc" ? "bi bi-chevron-up ms-1 text-primary" : "bi bi-chevron-down ms-1 text-primary";
-        }
-
-        // --- Search Functionality ---
-        document.getElementById('searchInput').addEventListener('input', function(e) {
-            const searchText = e.target.value.toLowerCase();
-            const rows = document.querySelectorAll('#aircraftTable tbody tr');
-            
-            rows.forEach(row => {
-                const text = row.textContent.toLowerCase();
-                row.style.display = text.includes(searchText) ? '' : 'none';
-            });
-        });
-
-        // Loading state
-        document.querySelector('form').addEventListener('submit', function() {
-            document.querySelector('.loading').classList.add('active');
-        });
-
-        // Hide scroll indicator logic
-        document.addEventListener('DOMContentLoaded', function() {
-            const tableResponsive = document.querySelector('.table-responsive');
-            const indicator = document.querySelector('.table-scroll-indicator');
-            if (tableResponsive && indicator) {
-                function updateIndicator() {
-                    const maxScroll = tableResponsive.scrollWidth - tableResponsive.clientWidth;
-                    if (tableResponsive.scrollLeft >= maxScroll - 2) {
-                        indicator.style.opacity = '0';
-                    } else {
-                        indicator.style.opacity = '0.8';
-                    }
-                }
-                tableResponsive.addEventListener('scroll', updateIndicator);
-                window.addEventListener('resize', updateIndicator);
-                updateIndicator();
-            }
-        });
-
-        // --- Charts and Map ---
-        {% if summary %}
-        
-        // 1. Leaflet Map Initialization
-        const mapThemeUrl = document.documentElement.getAttribute('data-bs-theme') === 'dark'
-            ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
-            : 'https://{s}.basemaps.cartocdn.com/rastertiles/voyager/{z}/{x}/{y}{r}.png';
-            
-        window.flightMap = L.map('flightMap').setView([0, 0], 2);
-        window.tileLayer = L.tileLayer(mapThemeUrl, {
-            attribution: '&copy; OpenStreetMap contributors &copy; CARTO',
-            subdomains: 'abcd',
-            maxZoom: 19
-        }).addTo(window.flightMap);
-
-        const initialAircraftData = [
-            {% for row in data %}
-            {
-                time: "{{ row['Time Local'] }}",
-                speed: parseFloat("{{ row['Speed'] }}"),
-                hex: "{{ row['Hex'] }}",
-                callsign: "{{ row['Callsign'] }}",
-                alt: parseFloat("{{ row['Altitude'] }}"),
-                lat: parseFloat("{{ row['Latitude'] }}"),
-                lon: parseFloat("{{ row['Longitude'] }}"),
-                reg: "{{ row.get('Registration', '') }}",
-                model: "{{ row.get('Model', '') }}"
-            },
-            {% endfor %}
-        ];
-
-        let mapLayers = [];
-
-        function updateMap(aircraftData, isLive = false) {
-            // Clear existing layers
-            mapLayers.forEach(layer => window.flightMap.removeLayer(layer));
-            mapLayers = [];
-            
-            const bounds = [];
-            const flightsByHex = {};
-            
-            // Normalize data keys (API returns capitalized keys)
-            const normalizedData = aircraftData.map(ac => ({
-                hex: ac.hex || ac.Hex || "UNKNOWN",
-                callsign: ac.callsign || ac.Callsign || "",
-                reg: ac.reg || ac.Registration || "",
-                model: ac.model || ac.Model || "",
-                alt: parseFloat(ac.alt || ac.Altitude),
-                speed: parseFloat(ac.speed || ac.Speed),
-                track: parseFloat(ac.track || ac.Track),
-                lat: parseFloat(ac.lat || ac.Latitude),
-                lon: parseFloat(ac.lon || ac.Longitude),
-                time: ac.time || ac["Time Local"] || ""
-            }));
-            
-            normalizedData.forEach(ac => {
-                if (!isNaN(ac.lat) && !isNaN(ac.lon) && ac.lat !== 0 && ac.lon !== 0) {
-                    if (!flightsByHex[ac.hex]) {
-                        flightsByHex[ac.hex] = [];
-                    }
-                    flightsByHex[ac.hex].push(ac);
-                    bounds.push([ac.lat, ac.lon]);
-                }
-            });
-
-            // Vibrant colors for different flight paths
-            const colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
-
-            Object.keys(flightsByHex).forEach((hex, index) => {
-                const flightPath = flightsByHex[hex];
-                const latlngs = flightPath.map(ac => [ac.lat, ac.lon]);
-                const color = colors[index % colors.length];
-                
-                // 1. Draw the line connecting the path
-                const polyline = L.polyline(latlngs, {
-                    color: color,
-                    weight: 2,
-                    opacity: 0.6,
-                    smoothFactor: 1
-                }).addTo(window.flightMap);
-                mapLayers.push(polyline);
-
-                // 2. Draw small dots/icons at each coordinate
-                flightPath.forEach((ac, i) => {
-                    const isLatest = (i === 0);
-                    let marker;
-                    
-                    if (isLatest) {
-                        let heading = ac.track;
-                        if (isNaN(heading) || heading === undefined) {
-                            if (flightPath.length > 1) {
-                                // Calculate heading between last two points
-                                const prev = flightPath[1];
-                                const dy = ac.lon - prev.lon;
-                                const dx = ac.lat - prev.lat;
-                                heading = Math.atan2(dy, dx) * (180 / Math.PI);
-                            } else {
-                                heading = 0; // fallback
-                            }
-                        }
-                        
-                        const iconHtml = `<div style="transform: rotate(${heading}deg); color: ${color}; font-size: 1.5rem; text-shadow: 1px 1px 2px #000;"><i class="bi bi-airplane-fill"></i></div>`;
-                        const planeIcon = L.divIcon({
-                            html: iconHtml,
-                            className: 'custom-plane-icon',
-                            iconSize: [24, 24],
-                            iconAnchor: [12, 12]
-                        });
-                        
-                        marker = L.marker([ac.lat, ac.lon], { icon: planeIcon }).addTo(window.flightMap);
-                        
-                        // Add permanent tooltip for Callsign
-                        if (ac.callsign) {
-                            marker.bindTooltip(`<b>${ac.callsign}</b>`, {
-                                permanent: true, 
-                                direction: 'right',
-                                className: 'bg-transparent border-0 text-white shadow-none fs-6',
-                                offset: [10, 0]
-                            });
-                        }
-                    } else {
-                        marker = L.circleMarker([ac.lat, ac.lon], {
-                            radius: 3,
-                            fillColor: color,
-                            color: "transparent",
-                            weight: 0,
-                            opacity: 1,
-                            fillOpacity: 0.8
-                        }).addTo(window.flightMap);
-                    }
-                    
-                    let timeStr = ac.time || ac["Time Local"] || "";
-                    if (timeStr.includes(' ')) timeStr = timeStr.split(' ')[1];
-
-                    let popupText = `<div style="font-family:'Outfit',sans-serif;">
-                                        <strong style="font-size:1.1em;color:${color}">${ac.hex}</strong><br>`;
-                    if (ac.callsign) popupText += `<b>Callsign:</b> ${ac.callsign}<br>`;
-                    if (ac.reg) popupText += `<b>Reg:</b> ${ac.reg}<br>`;
-                    if (ac.model) popupText += `<b>Model:</b> ${ac.model}<br>`;
-                    if (ac.alt) popupText += `<b>Altitude:</b> ${ac.alt} ft<br>`;
-                    if (ac.speed) popupText += `<b>Speed:</b> ${ac.speed} kts<br>`;
-                    if (timeStr) popupText += `<b>Time:</b> ${timeStr}`;
-                    popupText += `</div>`;
-                    
-                    marker.bindPopup(popupText);
-                    mapLayers.push(marker);
-                });
-            });
-
-            if (bounds.length > 0) {
-                window.flightMap.fitBounds(bounds, { padding: [30, 30] });
-            }
-
-            if (isLive) {
-                updateLiveList(flightsByHex, colors);
-            }
-        }
-
-        function updateLiveList(flightsByHex, colors) {
-            const listContainer = document.getElementById('liveAircraftList');
-            if (!listContainer) return;
-            
-            const hexes = Object.keys(flightsByHex);
-            if (hexes.length === 0) {
-                listContainer.innerHTML = `
-                    <div class="text-muted text-center mt-5">
-                        <i class="bi bi-info-circle mb-2 d-block fs-3"></i>
-                        No active flights currently tracked.
-                    </div>
-                `;
-                return;
-            }
-
-            let html = '<div class="list-group list-group-flush">';
-            hexes.forEach((hex, index) => {
-                const flightPath = flightsByHex[hex];
-                const latest = flightPath[0]; // newest ping
-                const color = colors[index % colors.length];
-                
-                // Emphasize callsign
-                let displayCallsign = latest.callsign ? `<span class="fw-bold fs-5 text-white">${latest.callsign}</span>` : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
-                
-                let speedAlt = "";
-                if (latest.speed && latest.alt) {
-                    speedAlt = `<small class="text-muted" style="font-size:0.7rem;">${latest.speed}kts | ${latest.alt}ft</small>`;
-                }
-                
-                let timeStr = latest.time || "";
-                if (timeStr.includes(' ')) timeStr = timeStr.split(' ')[1];
-                
-                html += `
-                <div class="list-group-item bg-transparent px-2 py-2 border-bottom border-secondary border-opacity-25">
-                    <div class="d-flex w-100 justify-content-between align-items-center mb-1">
-                        <div class="d-flex align-items-center">
-                            <span style="display:inline-block; width:10px; height:10px; border-radius:50%; background-color:${color}; margin-right:8px;"></span>
-                            ${displayCallsign}
-                        </div>
-                        <div class="text-end">
-                            <small class="text-muted d-block" style="font-size: 0.7rem;">Hex: ${latest.hex}</small>
-                            ${speedAlt}
-                        </div>
-                    </div>
-                    <div class="d-flex justify-content-between ms-3">
-                        <small class="text-muted text-truncate pe-2" style="max-width: 140px; font-size:0.75rem;" title="${latest.model || latest.reg}">${latest.model || latest.reg || 'Unknown Type'}</small>
-                        <small class="text-muted" style="font-size: 0.7rem;"><i class="bi bi-clock me-1"></i>${timeStr}</small>
-                    </div>
-                </div>`;
-            });
-            html += '</div>';
-            listContainer.innerHTML = html;
-        }
-
-        // Initialize with server-rendered data
-        updateMap(initialAircraftData, false);
-
-        // --- Independent Live Polling logic ---
-        let backgroundListInterval = setInterval(fetchListOnly, 60000);
-        let liveMapInterval = null;
-        let isLiveModeActive = false;
-
-        function fetchListOnly() {
-            if (isLiveModeActive) return; // Map polling handles list updates during live mode
-            fetch('/api/live_flights')
-                .then(response => response.json())
-                .then(data => {
-                    if (data && !data.error) {
-                        const flightsByHex = {};
-                        const normalizedData = data.map(ac => ({
-                            hex: ac.hex || ac.Hex || "UNKNOWN",
-                            callsign: ac.callsign || ac.Callsign || "",
-                            reg: ac.reg || ac.Registration || "",
-                            model: ac.model || ac.Model || "",
-                            alt: parseFloat(ac.alt || ac.Altitude),
-                            speed: parseFloat(ac.speed || ac.Speed),
-                            track: parseFloat(ac.track || ac.Track),
-                            lat: parseFloat(ac.lat || ac.Latitude),
-                            lon: parseFloat(ac.lon || ac.Longitude),
-                            time: ac.time || ac["Time Local"] || ""
-                        }));
-                        normalizedData.forEach(ac => {
-                            if (!isNaN(ac.lat) && !isNaN(ac.lon) && ac.lat !== 0 && ac.lon !== 0) {
-                                if (!flightsByHex[ac.hex]) flightsByHex[ac.hex] = [];
-                                flightsByHex[ac.hex].push(ac);
-                            }
-                        });
-                        const colors = ['#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844', '#f6d365', '#fda085', '#00f2fe', '#f093fb', '#f5576c'];
-                        updateLiveList(flightsByHex, colors);
-                    }
-                });
-        }
-        
-        // Fetch list once on page load so it's not empty when live mode is off
-        fetchListOnly();
-
-        // --- Live View Logic ---
-        const liveBtn = document.getElementById('liveViewToggle');
-        
-        liveBtn.addEventListener('click', function() {
-            if (liveMapInterval) {
-                // Stop Live View
-                clearInterval(liveMapInterval);
-                liveMapInterval = null;
-                isLiveModeActive = false;
-                liveBtn.classList.remove('btn-danger');
-                liveBtn.classList.add('btn-outline-danger');
-                liveBtn.innerHTML = '<i class="bi bi-record-circle me-1"></i> Live';
-                updateMap(initialAircraftData, false);
-                // Also trigger one list update right away
-                fetchListOnly();
-            } else {
-                // Start Live View
-                isLiveModeActive = true;
-                liveBtn.classList.remove('btn-outline-danger');
-                liveBtn.classList.add('btn-danger');
-                liveBtn.innerHTML = '<i class="bi bi-broadcast me-1 pulse-icon"></i> Live Active';
-                
-                fetchLiveFlights();
-                liveMapInterval = setInterval(fetchLiveFlights, 5000);
-            }
-        });
-
-        function fetchLiveFlights() {
-            fetch('/api/live_flights')
-                .then(response => response.json())
-                .then(data => {
-                    if (data && !data.error) {
-                        updateMap(data, true);
-                    } else {
-                        console.error("Error fetching live flights:", data.error);
-                    }
-                })
-                .catch(error => console.error("Failed to fetch live flights:", error));
-        }
-
-
-        // 2. Chart.js Defaults
-        Chart.defaults.font.family = "'Outfit', sans-serif";
-        Chart.defaults.color = document.documentElement.getAttribute('data-bs-theme') === 'dark' ? '#adb5bd' : '#6c757d';
-
-        // Listen for theme changes to update charts
-        const originalToggleTheme = toggleTheme;
-        toggleTheme = function() {
-            originalToggleTheme();
+        // Bootstrap App
+        window.onload = () => {
             const isDark = document.documentElement.getAttribute('data-bs-theme') === 'dark';
-            Chart.defaults.color = isDark ? '#adb5bd' : '#6c757d';
-            if(window.opChart) window.opChart.update();
-            if(window.modChart) window.modChart.update();
-            if(window.timelineChart) window.timelineChart.update();
-            if(window.scatterChart) window.scatterChart.update();
+            const mapThemeUrl = isDark 
+                ? 'https://{s}.basemaps.cartocdn.com/dark_all/{z}/{x}/{y}{r}.png'
+                : 'https://{s}.basemaps.cartocdn.com/light_all/{z}/{x}/{y}{r}.png';
+
+            window.dashboard = new AircraftDashboard({
+                initialData: [
+                    {% if data %}
+                        {% for row in data %}
+                        {
+                            time: "{{ row['Time Local'] }}",
+                            speed: "{{ row['Speed'] }}",
+                            hex: "{{ row['Hex'] }}",
+                            callsign: "{{ row['Callsign'] }}",
+                            alt: "{{ row['Altitude'] }}",
+                            lat: "{{ row['Latitude'] }}",
+                            lon: "{{ row['Longitude'] }}",
+                            reg: "{{ row['Registration'] }}",
+                            model: "{{ row['Model'] }}",
+                            track: "{{ row['Track'] }}"
+                        }{% if not loop.last %},{% endif %}
+                        {% endfor %}
+                    {% endif %}
+                ],
+                summary: {% if summary %}{{ summary|tojson }}{% else %}null{% endif %},
+                mapThemeUrl: mapThemeUrl
+            });
         };
-
-        // Operators Chart
-        const opCtx = document.getElementById('operatorsChart').getContext('2d');
-        const gradientPrimary = opCtx.createLinearGradient(0, 0, 0, 400);
-        gradientPrimary.addColorStop(0, 'rgba(102, 126, 234, 0.8)');
-        gradientPrimary.addColorStop(1, 'rgba(118, 75, 162, 0.8)');
-
-        window.opChart = new Chart(opCtx, {
-            type: 'bar',
-            data: {
-                labels: {{ summary.top_operators|map(attribute='0')|list|tojson }},
-                datasets: [{
-                    label: 'Aircraft Count',
-                    data: {{ summary.top_operators|map(attribute='1')|list|tojson }},
-                    backgroundColor: gradientPrimary,
-                    borderRadius: 6,
-                    borderWidth: 0
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false }
-                },
-                scales: {
-                    y: {
-                        beginAtZero: true,
-                        ticks: { stepSize: 1 },
-                        grid: { color: 'rgba(0,0,0,0.05)' }
-                    },
-                    x: {
-                        grid: { display: false }
-                    }
-                }
-            }
-        });
-
-        // Model Distribution Doughnut Chart
-        const modCtx = document.getElementById('modelsChart').getContext('2d');
-        window.modChart = new Chart(modCtx, {
-            type: 'doughnut',
-            data: {
-                labels: {{ summary.top_models|map(attribute='0')|list|tojson }},
-                datasets: [{
-                    data: {{ summary.top_models|map(attribute='1')|list|tojson }},
-                    backgroundColor: [
-                        '#667eea', '#764ba2', '#43e97b', '#4facfe', '#ff0844'
-                    ],
-                    borderWidth: 0,
-                    hoverOffset: 10
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                cutout: '65%',
-                plugins: {
-                    legend: {
-                        position: 'right',
-                        labels: {
-                            boxWidth: 12,
-                            padding: 15,
-                            font: { size: 11 }
-                        }
-                    }
-                }
-            }
-        });
-
-        // 3. Activity Timeline Chart
-        const hourCounts = new Array(24).fill(0);
-        initialAircraftData.forEach(ac => {
-            if (ac.time) {
-                const match = ac.time.match(/ (\d{2}):/);
-                if (match) {
-                    const hour = parseInt(match[1], 10);
-                    hourCounts[hour]++;
-                }
-            }
-        });
-        
-        const timelineCtx = document.getElementById('timelineChart').getContext('2d');
-        window.timelineChart = new Chart(timelineCtx, {
-            type: 'line',
-            data: {
-                labels: Array.from({length: 24}, (_, i) => `${i.toString().padStart(2, '0')}:00`),
-                datasets: [{
-                    label: 'Activity',
-                    data: hourCounts,
-                    borderColor: '#4facfe',
-                    backgroundColor: 'rgba(79, 172, 254, 0.2)',
-                    fill: true,
-                    tension: 0.4
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: { legend: { display: false } },
-                scales: {
-                    y: { beginAtZero: true, ticks: { stepSize: 1 } }
-                }
-            }
-        });
-
-        // 4. Altitude vs Speed Scatter Plot
-        // ADS-B messages often separate speed and altitude into different pings, 
-        // so we aggregate the maximum speed and altitude seen for each aircraft today.
-        const aircraftStats = {};
-        initialAircraftData.forEach(ac => {
-            if (!aircraftStats[ac.hex]) {
-                aircraftStats[ac.hex] = { speed: 0, alt: 0, model: ac.model, hex: ac.hex };
-            }
-            if (!isNaN(ac.speed) && ac.speed > aircraftStats[ac.hex].speed) aircraftStats[ac.hex].speed = ac.speed;
-            if (!isNaN(ac.alt) && ac.alt > aircraftStats[ac.hex].alt) aircraftStats[ac.hex].alt = ac.alt;
-            if (ac.model && !aircraftStats[ac.hex].model) aircraftStats[ac.hex].model = ac.model;
-        });
-
-        const scatterData = Object.values(aircraftStats)
-            .filter(ac => ac.speed > 0 && ac.alt > 0)
-            .map(ac => ({
-                x: ac.speed,
-                y: ac.alt,
-                hex: ac.hex,
-                model: ac.model
-            }));
-
-        const scatterCtx = document.getElementById('scatterChart').getContext('2d');
-        window.scatterChart = new Chart(scatterCtx, {
-            type: 'scatter',
-            data: {
-                datasets: [{
-                    label: 'Aircraft',
-                    data: scatterData,
-                    backgroundColor: 'rgba(255, 8, 68, 0.6)',
-                    borderColor: '#ff0844',
-                    pointRadius: 5,
-                    pointHoverRadius: 8
-                }]
-            },
-            options: {
-                responsive: true,
-                maintainAspectRatio: false,
-                plugins: {
-                    legend: { display: false },
-                    tooltip: {
-                        callbacks: {
-                            label: function(ctx) {
-                                const raw = ctx.raw;
-                                return `${raw.hex} (${raw.model}): ${raw.x} kts, ${raw.y} ft`;
-                            }
-                        }
-                    }
-                },
-                scales: {
-                    x: {
-                        title: { display: true, text: 'Speed (kts)' }
-                    },
-                    y: {
-                        title: { display: true, text: 'Altitude (ft)' }
-                    }
-                }
-            }
-        });
-        {% endif %}
-
     </script>
 </body>
 </html>

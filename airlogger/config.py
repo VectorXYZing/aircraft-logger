@@ -16,11 +16,31 @@ TIMEZONE = os.getenv("AIRLOGGER_TZ", os.getenv("TZ", ""))
 
 # Metadata
 METADATA_URL = os.getenv(
-    "AIRLOGGER_METADATA_URL", "https://opensky-network.org/api/metadata/aircraft/icao/{hex}"
+    "AIRLOGGER_METADATA_URL", "https://api.adsb.lol/v2/icao/{hex}"
 )
 CACHE_TTL = int(os.getenv("AIRLOGGER_CACHE_TTL", "86400"))
 MAX_RETRIES = int(os.getenv("AIRLOGGER_MAX_RETRIES", "3"))
 BACKOFF_BASE = float(os.getenv("AIRLOGGER_BACKOFF_BASE", "0.5"))
+OPERATORS_FILE = os.path.expanduser("~/.opensky_operators.json")
+
+# Connection / Socket
+DUMP1090_HOST = os.getenv("AIRLOGGER_DUMP1090_HOST", "localhost")
+DUMP1090_PORT = int(os.getenv("AIRLOGGER_DUMP1090_PORT", "30003"))
+SOCKET_TIMEOUT = int(os.getenv("AIRLOGGER_SOCKET_TIMEOUT", "10"))
+CONNECTION_RETRY_DELAY = int(os.getenv("AIRLOGGER_RETRY_DELAY", "5"))
+MAX_RETRY_DELAY = int(os.getenv("AIRLOGGER_MAX_RETRY_DELAY", "60"))
+
+# Logging & Heartbeat
+LOG_THROTTLE_SECONDS = int(os.getenv("AIRLOGGER_LOG_THROTTLE", "30"))
+HEARTBEAT_INTERVAL = int(os.getenv("AIRLOGGER_HEARTBEAT_INTERVAL", "30"))
+HEARTBEAT_FILE = os.path.join(LOG_DIR, "heartbeat.json")
+HEALTH_THRESHOLD = int(os.getenv("AIRLOGGER_HEALTH_THRESHOLD", "600"))  # seconds
+
+# Dashboard
+DASHBOARD_HOST = os.getenv("AIRLOGGER_DASHBOARD_HOST", "0.0.0.0")
+DASHBOARD_PORT = int(os.getenv("AIRLOGGER_DASHBOARD_PORT", "5001"))
+LIVE_DATA_MINUTES = int(os.getenv("AIRLOGGER_LIVE_MINUTES", "15"))
+VERSION = "1.3.8"
 
 # SMTP / email settings
 SMTP_SERVER = os.getenv("SMTP_SERVER")

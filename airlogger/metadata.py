@@ -8,14 +8,7 @@ import requests
 
 logger = logging.getLogger(__name__)
 
-# Configuration
-METADATA_URL = os.environ.get("AIRLOGGER_METADATA_URL", "https://api.adsb.lol/v2/icao/{hex}")
-CACHE_TTL = int(os.environ.get("AIRLOGGER_CACHE_TTL", 86400))
-MAX_RETRIES = int(os.environ.get("AIRLOGGER_MAX_RETRIES", 3))
-BACKOFF_BASE = float(os.environ.get("AIRLOGGER_BACKOFF_BASE", 0.5))
-
-# File to store discovered operators
-OPERATORS_FILE = os.path.expanduser("~/.opensky_operators.json")
+from airlogger.config import METADATA_URL, CACHE_TTL, MAX_RETRIES, BACKOFF_BASE, OPERATORS_FILE
 
 # Optimized caching system
 metadata_cache = {}  # hex -> {registration, model, operator, callsign, timestamp}
