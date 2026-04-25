@@ -120,16 +120,24 @@ def cleanup_old_logs(retention_days=30):
             continue
             
         filepath = os.path.join(LOG_DIR, filename)
+        if not os.path.exists(filepath):
+            continue
+            
         try:
             date_str = filename.replace('aircraft_log_', '').replace('.csv', '')
             file_date = datetime.strptime(date_str, '%Y-%m-%d').date()
             
             if file_date < cutoff_date:
                 os.remove(filepath)
-            elif not filename.endswith('.gz'):
-                with open(filepath, 'rb') as f_in, gzip.open(filepath + '.gz', 'wb') as f_out:
-                    shutil.copyfileobj(f_in, f_out)
-                os.remove(filepath)
+                logger.info(f"Deleted old log: {filename}")
+            else:
+                # Compress if not already compressed (it ends in .csv so it's not .gz)
+                compressed_path = filepath + '.gz'
+                if not os.path.exists(compressed_path):
+                    with open(filepath, 'rb') as f_in, gzip.open(compressed_path, 'wb') as f_out:
+                        shutil.copyfileobj(f_in, f_out)
+                    os.remove(filepath)
+                    logger.info(f"Compressed log: {filename}")
         except Exception as e:
             logger.error(f"Error processing log file {filename}: {e}")
 
