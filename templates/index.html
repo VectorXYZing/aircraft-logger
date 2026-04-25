@@ -197,20 +197,20 @@
                                             <tr style="cursor: pointer;" onclick="dashboard.focusAircraft('{{ row['Hex'] }}')">
                                                 <td class="text-nowrap">{{ row['Time Local'].split(' ')[1] }}</td>
                                                 <td>
-                                                    {% set fr24_reg = row['Registration'].replace('-', '') if row['Registration'] else '' %}
-                                                    <a href="https://www.flightradar24.com/data/aircraft/{{ fr24_reg }}" 
+                                                    {% set fr24_query = row['Registration'] if row['Registration'] else (row['Callsign'] if row['Callsign'] else row['Hex']) %}
+                                                    <a href="https://www.flightradar24.com/search?q={{ fr24_query }}" 
                                                        target="_blank" class="fw-bold text-decoration-none text-reset" onclick="event.stopPropagation();">
                                                         {{ row['Hex'] }}
                                                     </a>
                                                 </td>
                                                 <td>
-                                                    <a href="https://www.flightradar24.com/data/flights/{{ row['Callsign'] }}" 
+                                                    <a href="https://www.flightradar24.com/search?q={{ row['Callsign'] if row['Callsign'] else row['Hex'] }}" 
                                                        target="_blank" class="fw-bold text-primary text-decoration-none" onclick="event.stopPropagation();">
                                                         {{ row['Callsign'] }}
                                                     </a>
                                                 </td>
                                                 <td>
-                                                    <a href="https://www.flightradar24.com/data/aircraft/{{ fr24_reg }}" 
+                                                    <a href="https://www.flightradar24.com/search?q={{ row['Registration'] if row['Registration'] else row['Hex'] }}" 
                                                        target="_blank" class="text-decoration-none text-reset" onclick="event.stopPropagation();">
                                                         {{ row['Registration'] }}
                                                     </a>

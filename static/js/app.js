@@ -115,10 +115,9 @@ class AircraftDashboard {
                 
                 marker.bindPopup(this.createPopup(ac, color));
                 this.mapLayers.push(marker);
-            });
-            
-            // In non-live mode, clicking the marker can trigger the full path
-                if (!isLive) {
+
+                // In non-live mode, clicking the marker can trigger the full path
+                if (!isLive && isLatest) {
                     marker.on('click', () => {
                         const polyline = L.polyline(latlngs, {
                             color: color, weight: 3, opacity: 0.9, smoothFactor: 1
@@ -146,8 +145,8 @@ class AircraftDashboard {
 
     createPopup(ac, color) {
         let timeStr = (ac.time || "").split(' ')[1] || "";
-        // FR24 is much better with Registration than flight number
-        const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg.replace('-', '')}` : `https://www.flightradar24.com/data/flights/${ac.callsign}`;
+        // Search is much more robust than direct data links
+        const fr24Url = `https://www.flightradar24.com/search?q=${ac.reg || ac.callsign || ac.hex}`;
         
         return `<div style="font-family:'Outfit',sans-serif; min-width: 200px;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -193,9 +192,9 @@ class AircraftDashboard {
         hexes.forEach((hex, idx) => {
             const ac = flightsByHex[hex][0];
             const color = this.colors[idx % this.colors.length];
-            const callsignLink = ac.callsign ? `https://www.flightradar24.com/data/flights/${ac.callsign}` : '#';
+            const fr24Url = `https://www.flightradar24.com/search?q=${ac.reg || ac.callsign || ac.hex}`;
             const callsign = ac.callsign 
-                ? `<a href="${callsignLink}" target="_blank" class="fw-bold fs-5 text-primary text-decoration-none" onclick="event.stopPropagation();">${ac.callsign}</a>` 
+                ? `<a href="${fr24Url}" target="_blank" class="fw-bold fs-5 text-primary text-decoration-none" onclick="event.stopPropagation();">${ac.callsign}</a>` 
                 : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
             const timeStr = (ac.time || "").split(' ')[1] || "";
             
