@@ -11,6 +11,17 @@ def init_db():
     os.makedirs(os.path.dirname(DB_PATH), exist_ok=True)
     with get_db_connection() as conn:
         cursor = conn.cursor()
+        
+        # Auto-migrate: add 'track' column if it's missing from an older database
+        cursor.execute("SELECT count(name) FROM sqlite_master WHERE type='table' AND name='flights'")
+        if cursor.fetchone()[0] == 1:
+            cursor.execute("PRAGMA table_info(flights)")
+            columns = [info[1] for info in cursor.fetchall()]
+            if 'track' not in columns:
+                logger.info("Auto-migrating database: adding 'track' column...")
+                cursor.execute("ALTER TABLE flights ADD COLUMN track TEXT")
+                conn.commit()
+
         cursor.execute('''
             CREATE TABLE IF NOT EXISTS flights (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
