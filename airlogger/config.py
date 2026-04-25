@@ -21,9 +21,9 @@ METADATA_URL = os.getenv(
 CACHE_TTL = int(os.getenv("AIRLOGGER_CACHE_TTL", "86400"))
 MAX_RETRIES = int(os.getenv("AIRLOGGER_MAX_RETRIES", "3"))
 BACKOFF_BASE = float(os.getenv("AIRLOGGER_BACKOFF_BASE", "0.5"))
-# Station Location (for distance tracking)
-STATION_LAT = float(os.getenv("AIRLOGGER_STATION_LAT", "0.0"))
-STATION_LON = float(os.getenv("AIRLOGGER_STATION_LON", "0.0"))
+# Station Location (Jindivick, VIC)
+STATION_LAT = float(os.getenv("AIRLOGGER_STATION_LAT", "-38.0600"))
+STATION_LON = float(os.getenv("AIRLOGGER_STATION_LON", "145.9208"))
 OPERATORS_FILE = os.path.expanduser("~/.opensky_operators.json")
 
 # Connection / Socket
