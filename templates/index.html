@@ -203,7 +203,9 @@
                                                     </a>
                                                 </td>
                                                 <td>
-                                                    <a href="https://www.flightradar24.com/data/flights/{{ row['Callsign'] if row['Callsign'] else row['Hex'] }}" 
+                                                    {% set c = row['Callsign'] if row['Callsign'] else '' %}
+                                                    {% set clean_c = c.replace('QFA', 'QF').replace('JST', 'JQ').replace('VOZ', 'VA').replace('ANZ', 'NZ') %}
+                                                    <a href="https://www.flightradar24.com/data/flights/{{ clean_c if clean_c else row['Hex'] }}" 
                                                        target="_blank" class="fw-bold text-primary text-decoration-none" onclick="event.stopPropagation();">
                                                         {{ row['Callsign'] }}
                                                     </a>

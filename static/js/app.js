@@ -143,9 +143,21 @@ class AircraftDashboard {
         return Math.atan2(dy, dx) * (180 / Math.PI);
     }
 
+    getFR24Callsign(callsign) {
+        if (!callsign) return "";
+        let c = callsign.toUpperCase();
+        // Common ICAO to IATA mappings for better FR24 matching
+        if (c.startsWith("QFA")) return c.replace("QFA", "QF");
+        if (c.startsWith("JST")) return c.replace("JST", "JQ");
+        if (c.startsWith("VOZ")) return c.replace("VOZ", "VA");
+        if (c.startsWith("ANZ")) return c.replace("ANZ", "NZ");
+        return c;
+    }
+
     createPopup(ac, color) {
         let timeStr = (ac.time || "").split(' ')[1] || "";
-        const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${ac.callsign}`;
+        const cleanCallsign = this.getFR24Callsign(ac.callsign);
+        const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${cleanCallsign}`;
         
         return `<div style="font-family:'Outfit',sans-serif; min-width: 200px;">
                     <div class="d-flex justify-content-between align-items-center mb-2">
@@ -191,7 +203,8 @@ class AircraftDashboard {
         hexes.forEach((hex, idx) => {
             const ac = flightsByHex[hex][0];
             const color = this.colors[idx % this.colors.length];
-            const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${ac.callsign}`;
+            const cleanCallsign = this.getFR24Callsign(ac.callsign);
+            const fr24Url = ac.reg ? `https://www.flightradar24.com/data/aircraft/${ac.reg}` : `https://www.flightradar24.com/data/flights/${cleanCallsign}`;
             const callsign = ac.callsign 
                 ? `<a href="${fr24Url}" target="_blank" class="fw-bold fs-5 text-primary text-decoration-none" onclick="event.stopPropagation();">${ac.callsign}</a>` 
                 : `<span class="fw-bold fs-5 text-muted">UNKNOWN</span>`;
