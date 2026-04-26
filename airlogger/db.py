@@ -1,10 +1,16 @@
 import sqlite3
 import os
 import logging
+import time
+from datetime import datetime, timedelta
 from contextlib import contextmanager
 
 logger = logging.getLogger(__name__)
 DB_PATH = os.path.expanduser('~/aircraft-logger/logs/aircraft.db')
+
+# In-memory shared registry for live dashboard performance
+_live_registry = {}
+_last_registry_cleanup = 0
 
 def init_db():
     """Initialize the SQLite database and create tables if they don't exist."""
@@ -52,8 +58,41 @@ def get_db_connection():
     finally:
         conn.close()
 
+def get_live_registry(minutes=15):
+    """Return the current live aircraft registry, cleaned of old entries."""
+    global _live_registry, _last_registry_cleanup
+    
+    now = time.time()
+    # Periodic cleanup every minute
+    if now - _last_registry_cleanup > 60:
+        threshold = datetime.utcnow() - timedelta(minutes=minutes)
+        _live_registry = {
+            h: f for h, f in _live_registry.items() 
+            if datetime.strptime(f['time_utc'], '%Y-%m-%d %H:%M:%S.%f') > threshold
+        }
+        _last_registry_cleanup = now
+        
+    return _live_registry
+
 def insert_flight(timestamp_utc, hex_code, callsign, altitude, speed, track, lat, lon, registration, model, operator):
-    """Insert a flight record into the database."""
+    """Insert a flight record into the database and update live registry."""
+    global _live_registry
+    
+    # Update in-memory registry for the live dashboard
+    _live_registry[hex_code] = {
+        'hex': hex_code,
+        'callsign': callsign,
+        'alt': altitude,
+        'speed': speed,
+        'track': track,
+        'lat': lat,
+        'lon': lon,
+        'reg': registration,
+        'model': model,
+        'operator': operator,
+        'time_utc': timestamp_utc
+    }
+    
     with get_db_connection() as conn:
         cursor = conn.cursor()
         cursor.execute('''
