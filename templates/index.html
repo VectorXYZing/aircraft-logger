@@ -294,7 +294,9 @@
                     {% endif %}
                 ],
                 summary: {% if summary %}{{ summary|tojson }}{% else %}null{% endif %},
-                mapThemeUrl: mapThemeUrl
+                mapThemeUrl: mapThemeUrl,
+                stationLat: {{ config.STATION_LAT }},
+                stationLon: {{ config.STATION_LON }}
             });
         };
     </script>

@@ -160,6 +160,13 @@ class AircraftDashboard {
 
         if (bounds.length > 0) {
             this.flightMap.fitBounds(bounds, { padding: [30, 30] });
+            this.removeMapStatus();
+        } else {
+            // Default view: Center on Jindivick (approx 100nm zoom)
+            const lat = this.config.stationLat || 0;
+            const lon = this.config.stationLon || 0;
+            this.flightMap.setView([lat, lon], 9);
+            this.showMapStatus("No tracked aircraft");
         }
 
         if (isLive) {
@@ -249,7 +256,12 @@ class AircraftDashboard {
         
         const hexes = Object.keys(flightsByHex);
         if (hexes.length === 0) {
-            container.innerHTML = `<div class="text-muted text-center mt-5"><i class="bi bi-info-circle d-block fs-3 mb-2"></i>No active flights.</div>`;
+            container.innerHTML = `
+                <div class="text-muted text-center mt-5">
+                    <i class="bi bi-airplane d-block fs-1 mb-3 opacity-25"></i>
+                    <p class="fs-5 mb-0">No live aircraft being tracked</p>
+                    <small class="opacity-50">Watching the skies...</small>
+                </div>`;
             return;
         }
 
@@ -422,6 +434,38 @@ class AircraftDashboard {
                 }
             });
         }
+    }
+
+    showMapStatus(text) {
+        let statusEl = document.getElementById('mapStatusLabel');
+        if (!statusEl) {
+            statusEl = document.createElement('div');
+            statusEl.id = 'mapStatusLabel';
+            statusEl.style.cssText = `
+                position: absolute;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                z-index: 1000;
+                background: rgba(0,0,0,0.6);
+                color: white;
+                padding: 8px 20px;
+                border-radius: 50px;
+                backdrop-filter: blur(5px);
+                font-weight: bold;
+                border: 1px solid rgba(255,255,255,0.2);
+                pointer-events: none;
+                font-family: 'Outfit', sans-serif;
+            `;
+            document.getElementById('flightMap').appendChild(statusEl);
+        }
+        statusEl.innerText = text;
+        statusEl.style.display = 'block';
+    }
+
+    removeMapStatus() {
+        const statusEl = document.getElementById('mapStatusLabel');
+        if (statusEl) statusEl.style.display = 'none';
     }
 
     initEventListeners() {
