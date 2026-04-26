@@ -11,14 +11,20 @@ api_bp = Blueprint('api', __name__)
 logger = logging.getLogger(__name__)
 
 def calculate_distance(lat1, lon1, lat2, lon2):
-    """Calculate Haversine distance in nautical miles."""
-    if not all([lat1, lon1, lat2, lon2]): return None
-    R = 3440.065 # Nautical miles
-    phi1, phi2 = math.radians(lat1), math.radians(lat2)
-    dphi = math.radians(lat2 - lat1)
-    dlambda = math.radians(lon2 - lon1)
-    a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
-    return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    """Calculate Haversine distance in nautical miles with type safety."""
+    try:
+        if lat1 is None or lon1 is None or lat2 is None or lon2 is None: return None
+        l1, n1, l2, n2 = float(lat1), float(lon1), float(lat2), float(lon2)
+        if l2 == 0 or n2 == 0: return None # Filter out bad GPS data
+        
+        R = 3440.065 # Nautical miles
+        phi1, phi2 = math.radians(l1), math.radians(l2)
+        dphi = math.radians(l2 - l1)
+        dlambda = math.radians(n2 - n1)
+        a = math.sin(dphi/2)**2 + math.cos(phi1)*math.cos(phi2)*math.sin(dlambda/2)**2
+        return 2 * R * math.atan2(math.sqrt(a), math.sqrt(1-a))
+    except (ValueError, TypeError):
+        return None
 
 @api_bp.route('/api/live_flights')
 def live_flights():
@@ -29,9 +35,24 @@ def live_flights():
     for hex_code, flight in registry.items():
         # Include distance if station coordinates are set
         dist = calculate_distance(STATION_LAT, STATION_LON, flight.get('lat'), flight.get('lon'))
-        flight['distance'] = round(dist, 1) if dist is not None else None
-        # Frontend expects an array per hex
-        flights_by_hex[hex_code] = [flight]
+        
+        # Format for frontend consistency
+        processed_flight = {
+            'hex': flight.get('hex'),
+            'callsign': flight.get('callsign'),
+            'alt': flight.get('alt'),
+            'speed': flight.get('speed'),
+            'track': flight.get('track'),
+            'lat': flight.get('lat'),
+            'lon': flight.get('lon'),
+            'reg': flight.get('reg'),
+            'model': flight.get('model'),
+            'operator': flight.get('operator'),
+            'time': flight.get('time_utc'),
+            'distance': round(dist, 1) if dist is not None else None
+        }
+        
+        flights_by_hex[hex_code] = [processed_flight]
         
     return jsonify(flights_by_hex)
 
