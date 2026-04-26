@@ -66,10 +66,16 @@ def get_live_registry(minutes=15):
     # Periodic cleanup every minute
     if now - _last_registry_cleanup > 60:
         threshold = datetime.utcnow() - timedelta(minutes=minutes)
-        _live_registry = {
-            h: f for h, f in _live_registry.items() 
-            if datetime.strptime(f['time_utc'], '%Y-%m-%d %H:%M:%S.%f') > threshold
-        }
+        new_registry = {}
+        for h, f in _live_registry.items():
+            try:
+                # Handle both formats (with/without microseconds)
+                fmt = '%Y-%m-%d %H:%M:%S.%f' if '.' in f['time_utc'] else '%Y-%m-%d %H:%M:%S'
+                if datetime.strptime(f['time_utc'], fmt) > threshold:
+                    new_registry[h] = f
+            except:
+                continue
+        _live_registry = new_registry
         _last_registry_cleanup = now
         
     return _live_registry
