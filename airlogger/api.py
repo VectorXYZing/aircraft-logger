@@ -30,7 +30,8 @@ def live_flights():
         # Include distance if station coordinates are set
         dist = calculate_distance(STATION_LAT, STATION_LON, flight.get('lat'), flight.get('lon'))
         flight['distance'] = round(dist, 1) if dist is not None else None
-        flights_by_hex[hex_code] = flight
+        # Frontend expects an array per hex
+        flights_by_hex[hex_code] = [flight]
         
     return jsonify(flights_by_hex)
 
@@ -73,7 +74,11 @@ def export_kml(hex_code, date):
     
     for r in rows:
         if r['Latitude'] and r['Longitude']:
-            alt_m = (int(r['Altitude']) if r['Altitude'] else 0) * 0.3048 # Convert feet to meters
+            try:
+                raw_alt = str(r['Altitude']).replace(',', '') if r['Altitude'] else "0"
+                alt_m = int(float(raw_alt)) * 0.3048
+            except (ValueError, TypeError):
+                alt_m = 0
             kml.append(f"          {r['Longitude']},{r['Latitude']},{alt_m}")
             
     kml.extend([

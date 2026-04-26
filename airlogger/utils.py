@@ -1,6 +1,9 @@
 import pytz
+import logging
 from datetime import datetime
 from airlogger.config import TIMEZONE as TIMEZONE_CONFIG
+
+logger = logging.getLogger(__name__)
 
 try:
     from zoneinfo import ZoneInfo
@@ -9,42 +12,47 @@ except Exception:
     ZoneInfo = None
     HAS_ZONEINFO = False
 
-if TIMEZONE_CONFIG:
+# Robust timezone initialization
+LOCAL_TZ = None
+if TIMEZONE_CONFIG and TIMEZONE_CONFIG.strip():
     try:
         if HAS_ZONEINFO:
             LOCAL_TZ = ZoneInfo(TIMEZONE_CONFIG)
         else:
             LOCAL_TZ = pytz.timezone(TIMEZONE_CONFIG)
-    except Exception:
-        LOCAL_TZ = None
-else:
-    try:
-        LOCAL_TZ = datetime.now().astimezone().tzinfo
-    except Exception:
+    except Exception as e:
+        logger.warning(f"Could not load timezone {TIMEZONE_CONFIG}: {e}")
         LOCAL_TZ = None
 
-def convert_to_local(utc_str):
-    """Convert UTC string to local datetime."""
+if not LOCAL_TZ:
     try:
-        utc_time = datetime.strptime(utc_str, "%Y-%m-%d %H:%M:%S").replace(
+        # Fallback to system local time
+        LOCAL_TZ = datetime.now().astimezone().tzinfo
+    except Exception:
+        LOCAL_TZ = pytz.utc
+
+def convert_to_local(utc_str):
+    """Convert UTC string (YYYY-MM-DD HH:MM:SS) to local datetime."""
+    try:
+        if not utc_str: return None
+        # Handle formats with or without microseconds
+        fmt = "%Y-%m-%d %H:%M:%S.%f" if "." in utc_str else "%Y-%m-%d %H:%M:%S"
+        utc_time = datetime.strptime(utc_str, fmt).replace(
             tzinfo=ZoneInfo("UTC") if HAS_ZONEINFO else pytz.utc
         )
         if LOCAL_TZ:
             return utc_time.astimezone(LOCAL_TZ)
         return utc_time
-    except (ValueError, Exception):
+    except Exception as e:
+        logger.debug(f"Error converting {utc_str} to local: {e}")
         return None
 
 def get_local_time(utc_time_str):
-    """Convert UTC time string to local time."""
-    try:
-        if not utc_time_str: return ""
-        utc_dt = datetime.strptime(utc_time_str, '%Y-%m-%d %H:%M:%S.%f')
-        local_tz = pytz.timezone(TIMEZONE_CONFIG) if TIMEZONE_CONFIG else pytz.utc
-        local_dt = utc_dt.replace(tzinfo=pytz.utc).astimezone(local_tz)
-        return local_dt.strftime('%Y-%m-%d %H:%M:%S')
-    except Exception:
-        return utc_time_str
+    """Convert UTC time string to local time formatted string."""
+    dt = convert_to_local(utc_time_str)
+    if dt:
+        return dt.strftime('%Y-%m-%d %H:%M:%S')
+    return utc_time_str
 
 def get_fr24_callsign(callsign):
     """Convert ICAO callsign to IATA-ish flight number for FR24 links."""
