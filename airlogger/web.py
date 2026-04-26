@@ -4,6 +4,7 @@ from datetime import datetime, time as dt_time, timedelta
 from flask import Blueprint, render_template, request
 from airlogger.db import get_db_connection
 from airlogger.utils import convert_to_local, LOCAL_TZ, get_fr24_callsign
+from airlogger import config
 from airlogger.config import VERSION, HEALTH_THRESHOLD, HEARTBEAT_FILE
 import os
 import json
@@ -126,4 +127,11 @@ def index():
             health_status = {"healthy": age <= HEALTH_THRESHOLD, "age_seconds": int(age)}
         except: pass
 
-    return render_template("index.html", data=data, summary=summary, selected_date=selected_date, max_date=today_local, health_status=health_status, version=VERSION)
+    return render_template("index.html", 
+                           data=data, 
+                           summary=summary, 
+                           selected_date=selected_date, 
+                           max_date=today_local, 
+                           health_status=health_status, 
+                           version=VERSION,
+                           config=config)
