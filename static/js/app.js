@@ -42,26 +42,60 @@ class AircraftDashboard {
 
     initWeather() {
         // RainViewer API for real-time precipitation
+        this.weatherLayerReady = false;
         fetch('https://api.rainviewer.com/public/weather-maps.json')
-            .then(res => res.json())
+            .then(res => {
+                if (!res.ok) throw new Error(`RainViewer HTTP ${res.status}`);
+                return res.json();
+            })
             .then(data => {
+                if (!data.radar || !data.radar.past || data.radar.past.length === 0) {
+                    throw new Error('No radar data in RainViewer response');
+                }
                 const timestamp = data.radar.past[data.radar.past.length - 1].time;
-                this.weatherLayer = L.tileLayer(`https://tilecache.rainviewer.com/v2/radar/${timestamp}/512/{z}/{x}/{y}/2/1_1.png`, {
-                    opacity: 0.4
-                });
+                this.weatherLayer = L.tileLayer(
+                    `https://tilecache.rainviewer.com/v2/radar/${timestamp}/512/{z}/{x}/{y}/2/1_1.png`,
+                    { opacity: 0.4, zIndex: 500 }
+                );
+                this.weatherLayerReady = true;
+                // If user already clicked weather while it was loading, apply it now
+                if (this._pendingWeatherToggle) {
+                    this._pendingWeatherToggle = false;
+                    this.toggleWeather();
+                }
+            })
+            .catch(err => {
+                console.warn('Weather layer unavailable:', err);
+                const btn = document.getElementById('weatherToggle');
+                if (btn) {
+                    btn.disabled = true;
+                    btn.title = 'Weather data unavailable';
+                }
             });
     }
 
     toggleWeather() {
-        if (!this.weatherLayer) return;
+        const btn = document.getElementById('weatherToggle');
+        if (!this.weatherLayerReady) {
+            // Layer still loading — queue toggle and show feedback
+            this._pendingWeatherToggle = true;
+            if (btn) btn.innerHTML = '<i class="bi bi-cloud-rain me-1"></i> Loading...';
+            return;
+        }
         if (this.flightMap.hasLayer(this.weatherLayer)) {
             this.flightMap.removeLayer(this.weatherLayer);
-            document.getElementById('weatherToggle').classList.remove('btn-primary');
-            document.getElementById('weatherToggle').classList.add('btn-outline-primary');
+            if (btn) {
+                btn.classList.remove('btn-primary');
+                btn.classList.add('btn-outline-primary');
+                btn.innerHTML = '<i class="bi bi-cloud-rain me-1"></i> Weather';
+            }
         } else {
             this.weatherLayer.addTo(this.flightMap);
-            document.getElementById('weatherToggle').classList.remove('btn-outline-primary');
-            document.getElementById('weatherToggle').classList.add('btn-primary');
+            if (btn) {
+                btn.classList.remove('btn-outline-primary');
+                btn.classList.add('btn-primary');
+                btn.innerHTML = '<i class="bi bi-cloud-rain-fill me-1"></i> Weather On';
+            }
         }
     }
 
@@ -304,7 +338,11 @@ class AircraftDashboard {
             .then(r => r.json())
             .then(data => {
                 if (!data || data.error) return;
-                const normalized = this.normalizeData(data);
+                // API returns a dict keyed by hex; flatten to array first
+                const flatData = Array.isArray(data)
+                    ? data
+                    : Object.values(data).flat();
+                const normalized = this.normalizeData(flatData);
                 const flightsByHex = {};
                 normalized.forEach(ac => {
                     if (!isNaN(ac.lat) && !isNaN(ac.lon)) {
@@ -338,7 +376,14 @@ class AircraftDashboard {
     fetchLiveFlights() {
         fetch('/api/live_flights')
             .then(r => r.json())
-            .then(data => { if (data && !data.error) this.updateMap(data, true); })
+            .then(data => {
+                if (!data || data.error) return;
+                // API returns a dict keyed by hex; flatten to array first
+                const flatData = Array.isArray(data)
+                    ? data
+                    : Object.values(data).flat();
+                this.updateMap(flatData, true);
+            })
             .catch(e => console.error("Live fetch error", e));
     }
 
