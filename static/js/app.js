@@ -52,11 +52,13 @@ class AircraftDashboard {
                 if (!data.radar || !data.radar.past || data.radar.past.length === 0) {
                     throw new Error('No radar data in RainViewer response');
                 }
-                const timestamp = data.radar.past[data.radar.past.length - 1].time;
-                this.weatherLayer = L.tileLayer(
-                    `https://tilecache.rainviewer.com/v2/radar/${timestamp}/512/{z}/{x}/{y}/2/1_1.png`,
-                    { opacity: 0.4, zIndex: 500 }
-                );
+                const latest = data.radar.past[data.radar.past.length - 1];
+                const tileUrl = `${data.host}${latest.path}/512/{z}/{x}/{y}/2/1_1.png`;
+                this.weatherLayer = L.tileLayer(tileUrl, {
+                    opacity: 0.4,
+                    zIndex: 500,
+                    maxNativeZoom: 12  // RainViewer radar only supports up to zoom 12
+                });
                 this.weatherLayerReady = true;
                 // If user already clicked weather while it was loading, apply it now
                 if (this._pendingWeatherToggle) {
